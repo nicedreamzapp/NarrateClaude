@@ -16,6 +16,14 @@ TARGET_FILE="$DICT_DIR/state/target.json"
 LOG_FILE="$DICT_DIR/state/dictation.log"
 ERR_LOG="$DICT_DIR/state/dictation.log.stderr"
 INJ_LOG="$DICT_DIR/state/dictation.log.inject"
+# When the watchdog notices the bound Terminal window is gone, it touches
+# this flag instead of relying on signal delivery. The outer respawn loop
+# checks the flag before each iteration and exits cleanly. Without this,
+# the watchdog's `kill -TERM` race-loses to bash's deferred-signal handling
+# on a blocked pipeline read, and the listener silently respawns into the
+# void, transcribing the user's voice into a window that no longer exists.
+SHUTDOWN_FLAG="$DICT_DIR/state/.shutdown"
+rm -f "$SHUTDOWN_FLAG"
 
 if [ ! -x "$LISTEN_BIN" ]; then
     echo "dispatch: listener not compiled at $LISTEN_BIN" >&2
@@ -32,7 +40,9 @@ echo "[$(ts)] dispatch starting" >> "$LOG_FILE"
 # When this script exits for any reason, take the listener with us.
 cleanup() {
     echo "[$(ts)] dispatch cleanup" >> "$LOG_FILE"
+    rm -f "$SHUTDOWN_FLAG"
     pkill -P $$ 2>/dev/null || true
+    exit 0
 }
 trap cleanup EXIT INT TERM
 
@@ -40,19 +50,29 @@ trap cleanup EXIT INT TERM
 # still exists. The moment it's gone, kill our own process group so the
 # listener pipeline tears down. This is what enforces "listener only
 # lives as long as the launcher's window does."
+_request_shutdown() {
+    # Touch the flag, kill the listener so the parent's pipeline drains,
+    # and return. The outer respawn loop will see the flag and exit. We
+    # deliberately do NOT `kill -TERM "$DISPATCH_PID"` here because bash
+    # defers signal delivery while the parent is blocked on a pipeline
+    # read, which made the old TERM-based approach race-lose.
+    touch "$SHUTDOWN_FLAG"
+    pkill -f "$LISTEN_BIN" 2>/dev/null || true
+}
+
 window_watchdog() {
     while true; do
         sleep 3
         if [ ! -f "$TARGET_FILE" ]; then
-            echo "[$(ts)] watchdog: target file gone, exiting" >> "$LOG_FILE"
-            kill -TERM "$DISPATCH_PID" 2>/dev/null
+            echo "[$(ts)] watchdog: target file gone, requesting shutdown" >> "$LOG_FILE"
+            _request_shutdown
             return
         fi
         local wid
         wid=$(/usr/bin/python3 -c "import json; print(json.load(open('$TARGET_FILE'))['window_id'])" 2>/dev/null)
         if [ -z "$wid" ]; then
-            echo "[$(ts)] watchdog: no window_id in target file, exiting" >> "$LOG_FILE"
-            kill -TERM "$DISPATCH_PID" 2>/dev/null
+            echo "[$(ts)] watchdog: no window_id in target file, requesting shutdown" >> "$LOG_FILE"
+            _request_shutdown
             return
         fi
         local exists
@@ -72,8 +92,8 @@ end tell
 OSA
 )
         if [ "$exists" != "yes" ]; then
-            echo "[$(ts)] watchdog: bound window $wid is gone, exiting" >> "$LOG_FILE"
-            kill -TERM "$DISPATCH_PID" 2>/dev/null
+            echo "[$(ts)] watchdog: bound window $wid is gone, requesting shutdown" >> "$LOG_FILE"
+            _request_shutdown
             return
         fi
     done
@@ -95,6 +115,11 @@ WATCHDOG_PID=$!
 # buffer backlog and bails, and we restart here.
 respawn_count=0
 while true; do
+    if [ -f "$SHUTDOWN_FLAG" ]; then
+        echo "[$(ts)] dispatch: shutdown requested by watchdog, exiting cleanly" >> "$LOG_FILE"
+        rm -f "$SHUTDOWN_FLAG"
+        exit 0
+    fi
     respawn_count=$((respawn_count + 1))
     echo "[$(ts)] dispatch: starting listener (attempt $respawn_count)" >> "$LOG_FILE"
     start_epoch=$(date +%s)
