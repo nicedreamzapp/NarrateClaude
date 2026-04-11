@@ -13,6 +13,18 @@
   </p>
 </p>
 
+> ## 🧩 You're looking at the **EARS + MOUTH** of a three-repo local-first ambient-computing stack
+>
+> Pair it with its sibling repos for the full experience:
+>
+> | 🎤 **THIS REPO** | 🤖 **claude-code-local** | 🌐 **browser-agent** |
+> |:---:|:---:|:---:|
+> | **EARS + MOUTH** | **BRAIN** | **HANDS** |
+> | Talk to your Mac, hear it reply in your own cloned voice — 100% on-device | Runs local AI (Gemma / Llama / Qwen) + Claude Code | Drives a real Brave browser via Chrome DevTools |
+> | *You are here* 👈 | 🔗 [**github.com/nicedreamzapp/claude-code-local**](https://github.com/nicedreamzapp/claude-code-local) | 🔗 [**github.com/nicedreamzapp/browser-agent**](https://github.com/nicedreamzapp/browser-agent) |
+>
+> 👉 **[See how all three fit together below](#-the-complete-local-first-stack)**
+
 ---
 
 ## ✨ TL;DR
