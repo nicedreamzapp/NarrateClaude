@@ -1,0 +1,121 @@
+#!/bin/bash
+# dispatch — long-running pipeline that runs the Swift listener and pastes
+# each transcribed utterance into the bound Terminal window.
+#
+# Reads target window ID from state/target.json fresh on every utterance
+# (via inject), so re-binding while running just works.
+#
+# To stop: `dictation stop` (or close the window — inject notices and bails).
+
+set -uo pipefail
+
+DICT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LISTEN_BIN="$DICT_DIR/bin/listen"
+INJECT_BIN="$DICT_DIR/bin/inject"
+TARGET_FILE="$DICT_DIR/state/target.json"
+LOG_FILE="$DICT_DIR/state/dictation.log"
+ERR_LOG="$DICT_DIR/state/dictation.log.stderr"
+INJ_LOG="$DICT_DIR/state/dictation.log.inject"
+
+if [ ! -x "$LISTEN_BIN" ]; then
+    echo "dispatch: listener not compiled at $LISTEN_BIN" >&2
+    exit 1
+fi
+if [ ! -f "$TARGET_FILE" ]; then
+    echo "dispatch: no target window bound (missing $TARGET_FILE)" >&2
+    exit 1
+fi
+
+ts() { date "+%H:%M:%S"; }
+echo "[$(ts)] dispatch starting" >> "$LOG_FILE"
+
+# When this script exits for any reason, take the listener with us.
+cleanup() {
+    echo "[$(ts)] dispatch cleanup" >> "$LOG_FILE"
+    pkill -P $$ 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+
+# Window watchdog: poll Terminal every 3s to confirm the bound window
+# still exists. The moment it's gone, kill our own process group so the
+# listener pipeline tears down. This is what enforces "listener only
+# lives as long as the launcher's window does."
+window_watchdog() {
+    while true; do
+        sleep 3
+        if [ ! -f "$TARGET_FILE" ]; then
+            echo "[$(ts)] watchdog: target file gone, exiting" >> "$LOG_FILE"
+            kill -TERM "$DISPATCH_PID" 2>/dev/null
+            return
+        fi
+        local wid
+        wid=$(/usr/bin/python3 -c "import json; print(json.load(open('$TARGET_FILE'))['window_id'])" 2>/dev/null)
+        if [ -z "$wid" ]; then
+            echo "[$(ts)] watchdog: no window_id in target file, exiting" >> "$LOG_FILE"
+            kill -TERM "$DISPATCH_PID" 2>/dev/null
+            return
+        fi
+        local exists
+        exists=$(/usr/bin/osascript <<OSA 2>/dev/null
+tell application "Terminal"
+    set found to "no"
+    repeat with w in windows
+        try
+            if (id of w as text) is "$wid" then
+                set found to "yes"
+                exit repeat
+            end if
+        end try
+    end repeat
+    return found
+end tell
+OSA
+)
+        if [ "$exists" != "yes" ]; then
+            echo "[$(ts)] watchdog: bound window $wid is gone, exiting" >> "$LOG_FILE"
+            kill -TERM "$DISPATCH_PID" 2>/dev/null
+            return
+        fi
+    done
+}
+
+DISPATCH_PID=$$
+window_watchdog &
+WATCHDOG_PID=$!
+
+# Main pipeline: stream listener stdout into per-line inject calls. Inject
+# reads target.json fresh on every call so the binding can be re-pointed
+# without restarting dispatch.
+#
+# Wrapped in a respawn loop so any listener exit (watchdog wedge detection
+# at exit 99, preventive recycle at exit 0, crash at any other code) gets
+# automatically replaced with a fresh process. The Swift listener is
+# self-monitoring via its watchdog thread; if SFSpeechRecognizer hangs on
+# a sync XPC call into the speech daemon, the watchdog notices the audio
+# buffer backlog and bails, and we restart here.
+respawn_count=0
+while true; do
+    respawn_count=$((respawn_count + 1))
+    echo "[$(ts)] dispatch: starting listener (attempt $respawn_count)" >> "$LOG_FILE"
+    start_epoch=$(date +%s)
+
+    "$LISTEN_BIN" 2>>"$ERR_LOG" | while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        printf "[%s] %s\n" "$(ts)" "$line" >> "$LOG_FILE"
+        "$INJECT_BIN" "$line" >> "$INJ_LOG" 2>&1 || true
+    done
+
+    # Pipeline ended — listener exited for some reason.
+    end_epoch=$(date +%s)
+    lifetime=$((end_epoch - start_epoch))
+    echo "[$(ts)] dispatch: listener exited after ${lifetime}s, respawning" >> "$LOG_FILE"
+
+    # If the listener died almost immediately, something is fundamentally
+    # broken (auth revoked, mic gone, binary missing). Back off harder so
+    # we don't busy-loop and fill the log.
+    if [ "$lifetime" -lt 3 ]; then
+        sleep 5
+    else
+        sleep 1
+    fi
+done

@@ -1,0 +1,17 @@
+.DS_Store
+.claude/
+
+# Compiled Swift listener — users build this locally with `dictation setup`
+dictation/bin/listen
+
+# Runtime state — PID files, logs, window-id bindings
+dictation/state/
+
+# Backup files
+*.bak
+*.orig
+*~
+
+# Logs
+*.log
+*.log.*

@@ -1,0 +1,224 @@
+#!/bin/bash
+# dictation — control script for NarrateClaude hands-free dictation
+#
+# Subcommands:
+#   setup    Bind to the Terminal window currently running `claude`,
+#            compile the Swift listener, and prep state.
+#   start    Launch the listener in the background. Each detected utterance
+#            is pasted into the bound window followed by Return.
+#   stop     Kill the running listener.
+#   status   Show whether dictation is on, plus the bound window ID.
+#   toggle   Flip on / off.
+#   tail     Tail the dictation log.
+#   uninstall Remove pid + log + binding.
+#
+# Files:
+#   src/Listen.swift          source for the listener
+#   bin/listen                compiled listener (created by `setup`)
+#   bin/inject                paste-into-window helper
+#   state/target.json         { "app": "Terminal", "window_id": N }
+#   state/listener.pid        pid of the running listener pipeline
+#   state/dictation.log       transcripts + status messages
+
+set -euo pipefail
+
+DICT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SRC="$DICT_DIR/src/Listen.swift"
+LISTEN_BIN="$DICT_DIR/bin/listen"
+INJECT_BIN="$DICT_DIR/bin/inject"
+STATE_DIR="$DICT_DIR/state"
+TARGET_FILE="$STATE_DIR/target.json"
+PID_FILE="$STATE_DIR/listener.pid"
+LOG_FILE="$STATE_DIR/dictation.log"
+
+mkdir -p "$STATE_DIR"
+
+cmd="${1:-status}"
+shift || true
+
+is_running() {
+    [ -f "$PID_FILE" ] || return 1
+    local pid
+    pid=$(cat "$PID_FILE" 2>/dev/null || true)
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+case "$cmd" in
+
+setup)
+    # 1. Find the Terminal window currently running `claude` and store its
+    #    Apple-Terminal window ID. We pick the first match. If multiple
+    #    Claude Code sessions are open, run `dictation setup` from inside
+    #    the one you actually want bound.
+    win_id=$(/usr/bin/osascript <<'OSA'
+tell application "Terminal"
+    set foundId to missing value
+    repeat with w in windows
+        repeat with t in tabs of w
+            try
+                set procs to processes of t
+                if procs contains "claude" then
+                    set foundId to id of w
+                    exit repeat
+                end if
+            end try
+        end repeat
+        if foundId is not missing value then exit repeat
+    end repeat
+    if foundId is missing value then
+        return ""
+    else
+        return foundId as text
+    end if
+end tell
+OSA
+    )
+
+    if [ -z "$win_id" ]; then
+        echo "setup: couldn't find a Terminal window running 'claude'." >&2
+        echo "       Make sure this Claude Code session is in an Apple Terminal window," >&2
+        echo "       then run setup again from inside it." >&2
+        exit 1
+    fi
+
+    cat > "$TARGET_FILE" <<JSON
+{ "app": "Terminal", "window_id": $win_id }
+JSON
+    echo "Bound to Terminal window $win_id"
+
+    # 2. Compile Listen.swift
+    if [ ! -f "$SRC" ]; then
+        echo "setup: missing $SRC" >&2
+        exit 1
+    fi
+    echo "Compiling listener..."
+    /usr/bin/swiftc -O "$SRC" -o "$LISTEN_BIN"
+    echo "Compiled: $LISTEN_BIN"
+
+    chmod +x "$INJECT_BIN" "$LISTEN_BIN" "$DICT_DIR/bin/dictation"
+    echo
+    echo "Setup complete."
+    echo "Next: dictation start"
+    ;;
+
+start)
+    # Hard guard: only the two authorized launchers may start the listener.
+    # NarrativeClaude.app and "Narrative Gemma.command" each export
+    # NARRATE_DICTATION_LAUNCHER before calling us; anyone else gets refused.
+    # This is independent of the dispatch watchdog — it stops the listener
+    # from ever spinning up the mic in the first place when invoked from
+    # the wrong place.
+    LAUNCHER="${NARRATE_DICTATION_LAUNCHER:-}"
+    case "$LAUNCHER" in
+        "NarrativeClaude.app"|"Narrative Gemma.command") ;;
+        *)
+            echo "dictation start: refused — the listener may only be started by" >&2
+            echo "  NarrativeClaude.app or 'Narrative Gemma.command'." >&2
+            echo "  NARRATE_DICTATION_LAUNCHER was '$LAUNCHER' (expected one of those two)." >&2
+            exit 3
+            ;;
+    esac
+    echo "[$(date '+%H:%M:%S')] dictation: authorized launcher = $LAUNCHER" >> "$LOG_FILE"
+
+    if [ ! -x "$LISTEN_BIN" ]; then
+        echo "start: listener not compiled. Run: dictation setup" >&2
+        exit 1
+    fi
+    if [ ! -f "$TARGET_FILE" ]; then
+        echo "start: no bound window. Run: dictation setup" >&2
+        exit 1
+    fi
+
+    # Defensive cleanup: kill ANY existing dispatch/listen processes —
+    # tracked or orphaned — before starting a fresh pipeline. The PID-file
+    # check below only catches the *most recent* run; if a previous start
+    # was clobbered without a stop, its dispatch would still be alive in
+    # a respawn loop, churning out duplicate listeners. Always nuke first.
+    pkill -9 -f "$DICT_DIR/bin/dispatch" 2>/dev/null || true
+    pkill -9 -f "$DICT_DIR/bin/listen" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    sleep 0.3
+
+    if is_running; then
+        echo "Already running (pid $(cat "$PID_FILE"))"
+        exit 0
+    fi
+
+    : > "$LOG_FILE.stderr"
+    # Run the dispatch script (listener pipeline + window watchdog) in the
+    # background, fully detached from this shell.
+    nohup "$DICT_DIR/bin/dispatch" >/dev/null 2>&1 &
+
+    pid=$!
+    echo "$pid" > "$PID_FILE"
+    sleep 0.4
+    if is_running; then
+        echo "Dictation started (pid $pid)"
+        echo "Speak naturally. ~1s of silence ends each utterance."
+        echo "Watch transcripts: dictation tail"
+    else
+        echo "Failed to start. Check $LOG_FILE.stderr" >&2
+        rm -f "$PID_FILE"
+        exit 1
+    fi
+    ;;
+
+stop)
+    if ! is_running; then
+        echo "Not running."
+        rm -f "$PID_FILE"
+        exit 0
+    fi
+    pid=$(cat "$PID_FILE")
+    # Kill the dispatch wrapper, its descendants (listener + watchdog), and
+    # any stray listen binaries left from previous runs.
+    pkill -P "$pid" 2>/dev/null || true
+    kill "$pid" 2>/dev/null || true
+    pkill -f "$DICT_DIR/bin/dispatch" 2>/dev/null || true
+    pkill -f "$DICT_DIR/bin/listen" 2>/dev/null || true
+    rm -f "$PID_FILE"
+    echo "Stopped."
+    ;;
+
+toggle)
+    if is_running; then
+        exec "$0" stop
+    else
+        exec "$0" start
+    fi
+    ;;
+
+status)
+    if is_running; then
+        echo "Dictation: ON (pid $(cat "$PID_FILE"))"
+    else
+        echo "Dictation: OFF"
+    fi
+    if [ -f "$TARGET_FILE" ]; then
+        echo "Bound:     $(cat "$TARGET_FILE")"
+    else
+        echo "Bound:     (none — run dictation setup)"
+    fi
+    if [ -x "$LISTEN_BIN" ]; then
+        echo "Listener:  compiled ($LISTEN_BIN)"
+    else
+        echo "Listener:  not compiled"
+    fi
+    ;;
+
+tail)
+    touch "$LOG_FILE"
+    exec tail -f "$LOG_FILE"
+    ;;
+
+uninstall)
+    "$0" stop || true
+    rm -f "$PID_FILE" "$TARGET_FILE" "$LOG_FILE" "$LOG_FILE.stderr" "$LOG_FILE.inject"
+    echo "Removed pid, target, and log files. Binary kept at $LISTEN_BIN."
+    ;;
+
+*)
+    echo "usage: dictation {setup|start|stop|toggle|status|tail|uninstall}" >&2
+    exit 2
+    ;;
+esac

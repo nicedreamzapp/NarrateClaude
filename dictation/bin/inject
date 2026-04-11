@@ -1,0 +1,79 @@
+#!/bin/bash
+# inject — send a single line of dictated text to the bound Terminal tab
+# running `claude`, and have it submitted as if the user pressed Return.
+#
+# Uses Apple Terminal's `do script ... in selected tab of window N`, which
+# writes the text directly to that tab's tty followed by a newline. The
+# running `claude` TUI sees the newline as Enter, so the message submits
+# immediately. This bypasses the prior Cmd+V/keystroke pipeline entirely:
+#   - no clipboard save/restore
+#   - no Cmd+V → bracketed-paste race
+#   - no `osascript is not allowed to send keystrokes` TCC dance
+#   - no need to bring the window to the front (works in the background)
+#
+# Strict binding: if target.json points at a window that no longer exists,
+# we exit cleanly without injecting anywhere. Previously this script would
+# fall back to "any Terminal tab running claude," which caused dictation
+# from a closed NarrativeClaude window to spill into unrelated Claude
+# sessions. The dispatch watchdog will tear the whole pipeline down on
+# its next tick anyway.
+#
+# Usage:
+#   inject "the text to type"
+#   echo "the text" | inject
+
+set -uo pipefail
+
+DICT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+TARGET_FILE="$DICT_DIR/state/target.json"
+
+if [ ! -f "$TARGET_FILE" ]; then
+    echo "inject: not bound to a window. Run: dictation setup" >&2
+    exit 1
+fi
+
+if [ "$#" -gt 0 ]; then
+    TEXT="$*"
+else
+    TEXT="$(cat)"
+fi
+
+# Strip any trailing newline — `do script` always appends one and we don't
+# want a double-Enter.
+TEXT="${TEXT%$'\n'}"
+[ -z "$TEXT" ] && exit 0
+
+WIN_ID=$(/usr/bin/python3 -c "import json; print(json.load(open('$TARGET_FILE'))['window_id'])" 2>/dev/null)
+if [ -z "$WIN_ID" ]; then
+    echo "inject: target.json missing window_id" >&2
+    exit 1
+fi
+
+# Hand the text to AppleScript via env var so we don't have to escape
+# quotes / backslashes / newlines into the script body.
+RESULT=$(INJECT_TEXT="$TEXT" /usr/bin/osascript \
+    -e 'on run' \
+    -e '  set targetText to (system attribute "INJECT_TEXT")' \
+    -e "  set targetWindowId to $WIN_ID" \
+    -e '  tell application "Terminal"' \
+    -e '    set targetWin to missing value' \
+    -e '    repeat with w in windows' \
+    -e '      try' \
+    -e '        if id of w is targetWindowId then' \
+    -e '          set targetWin to w' \
+    -e '          exit repeat' \
+    -e '        end if' \
+    -e '      end try' \
+    -e '    end repeat' \
+    -e '    if targetWin is missing value then return "missing"' \
+    -e '    do script targetText in selected tab of targetWin' \
+    -e '  end tell' \
+    -e '  return "ok"' \
+    -e 'end run' 2>&1)
+
+# Strict mode: if the bound window is gone, do nothing. The dispatch
+# watchdog will notice and tear the whole pipeline down shortly.
+echo "$RESULT"
+if [ "$RESULT" = "missing" ]; then
+    exit 2
+fi
