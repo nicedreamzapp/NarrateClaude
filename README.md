@@ -382,10 +382,46 @@ Small PRs welcome. Huge PRs welcome. Ideas-with-no-code welcome.
 
 ---
 
-## 🔗 Sibling Projects
+## 🧩 The Complete Local-First Stack
 
-- 🤖 [**claude-code-local**](https://github.com/nicedreamzapp/claude-code-local) — The local AI brain NarrateClaude was originally built to talk to. Run Claude Code with a local Gemma / Llama / Qwen model, zero cloud calls.
-- 🌐 [**browser-agent**](https://github.com/nicedreamzapp/browser-agent) — A separate project that drives a real Brave browser via Chrome DevTools Protocol using the same local AI setup.
+`NarrateClaude` is the **ears and mouth** — the listener, the injector, the cloned-voice pipeline. It's one of three sibling repos that together form a **local-first ambient computing stack** that never sends a keystroke, a voice clip, or a page load to the cloud. Each piece stands alone; together they're the full setup.
+
+```
+      🎤 NarrateClaude         🤖 claude-code-local          🌐 browser-agent
+      ─────────────────        ────────────────────         ──────────────────
+      EARS + MOUTH             BRAIN                        HANDS
+      (this repo)              ────────────────────         ──────────────────
+      ─────────────────        MLX + Gemma / Llama     →    Chrome DevTools
+      Apple SFSpeech     →     Anthropic API server         iframes + Shadow DOM
+      continuous listener      Tool-call parser (×3)        Brave browser control
+      AppleScript inject       Code mode, prompt cache      Snapshot + click + type
+      cloned-voice TTS         Narrative Gemma launcher     ──────────────────
+      ─────────────────        ────────────────────         🔗 github.com/
+      🔗 github.com/           🔗 github.com/                nicedreamzapp/
+      nicedreamzapp/           nicedreamzapp/                browser-agent
+      NarrateClaude            claude-code-local
+      (this repo)
+```
+
+| What you want | Clone |
+|---|---|
+| 🎙️ Just the continuous on-device dictation pipeline (any CLI target) | Just this repo |
+| 🎤 Talk to Claude Code and hear it narrate back in your own voice | This repo **+** [`claude-code-local`](https://github.com/nicedreamzapp/claude-code-local) |
+| 🌐 Talk to a local AI that can drive Claude Code **and** a real browser | All three |
+| 🪴 Full ambient-computing stack on one Mac, 100% on-device | All three |
+
+### Why two repos instead of one bundle
+
+**Focus.** The listening pipeline is a general-purpose macOS dictation tool — it'll drive any Terminal-based CLI, not just Claude Code. The brain side is a full local-AI server with its own architecture and roadmap. Smooshing them together would mean two teams of contributors stepping on each other and a vendored-copy drift problem. Separate repos = separate focus = clean contribution surface for each.
+
+Think of it as hi-fi audio gear: the speakers and the amplifier are separate components, each great on its own, and together they make a system.
+
+---
+
+## 🔗 Sibling Projects (Quick Links)
+
+- 🤖 [**claude-code-local**](https://github.com/nicedreamzapp/claude-code-local) — The local AI brain NarrateClaude was originally built to talk to. Run Claude Code against a local Gemma / Llama / Qwen model with zero cloud calls. Ships the `Narrative Gemma.command` launcher that loads the narration persona on the model side.
+- 🌐 [**browser-agent**](https://github.com/nicedreamzapp/browser-agent) — Drives a real Brave browser via Chrome DevTools Protocol using the same local AI setup. Add it to the stack when you want the model to navigate the web for you.
 
 ---
 
