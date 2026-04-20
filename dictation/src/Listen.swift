@@ -19,11 +19,13 @@
 // Output: one transcript per line on stdout. Status messages on stderr.
 //
 // Env var overrides:
-//   LISTEN_STABILITY_SEC  how long partial text must be unchanged to finalize (default 2.5)
-//   LISTEN_MAX_UTTER_SEC  hard cap on a single utterance in seconds (default 60)
-//   LISTEN_MAX_SESSION_SEC preventive process recycle after this many seconds (default 600)
-//   LISTEN_WEDGE_BACKLOG  how many unprocessed buffers triggers a wedge exit (default 200)
-//   LISTEN_DEBUG          set to "1" for verbose diagnostic logging
+//   LISTEN_STABILITY_SEC      how long partial text must be unchanged to finalize (default 2.5)
+//   LISTEN_MAX_UTTER_SEC      hard cap on a single utterance in seconds (default 60)
+//   LISTEN_MAX_SESSION_SEC    preventive process recycle after this many seconds (default 300)
+//   LISTEN_WEDGE_BACKLOG      how many unprocessed buffers triggers a wedge exit (default 200)
+//   LISTEN_SILENT_WEDGE_SEC   no recognition events for this long while audio is active = wedge (default 20)
+//   LISTEN_AUDIO_THRESHOLD    sample max-abs above this counts as "real audio" not silence (default 0.01)
+//   LISTEN_DEBUG              set to "1" for verbose diagnostic logging
 //
 // Exit codes:
 //   0  clean exit (preventive recycle, stdin closed, etc.)
@@ -50,13 +52,34 @@ let maxUtteranceDuration: Double = {
 
 let maxSessionDuration: Double = {
     if let s = ProcessInfo.processInfo.environment["LISTEN_MAX_SESSION_SEC"], let d = Double(s) { return d }
-    return 600.0   // 10 minutes — preventive recycle to dodge SFSpeech daemon wedges
+    return 300.0   // 5 minutes — preventive recycle to dodge SFSpeech daemon wedges
 }()
 
 let wedgeBacklogThreshold: Int = {
     if let s = ProcessInfo.processInfo.environment["LISTEN_WEDGE_BACKLOG"], let i = Int(s) { return i }
     return 200     // ~4-5s of audio buffers piled up = listener queue is wedged
 }()
+
+// Silent-wedge detector: SFSpeech sometimes goes quiet without crashing or
+// piling up backlog — audio is being fed and processed normally, but the
+// recognizer just stops emitting partial/final events. We catch this by
+// tracking "time since last recognition event" against "time since last
+// non-silent audio buffer". If real speech audio is flowing AND no events
+// have come back for silentWedgeMaxSec, we've wedged silently and exit 99.
+let silentWedgeMaxSec: Double = {
+    if let s = ProcessInfo.processInfo.environment["LISTEN_SILENT_WEDGE_SEC"], let d = Double(s) { return d }
+    return 20.0
+}()
+
+let silentWedgeAudioThreshold: Float = {
+    if let s = ProcessInfo.processInfo.environment["LISTEN_AUDIO_THRESHOLD"], let d = Float(s) { return d }
+    return 0.01
+}()
+
+// How recent the last "real audio" buffer must be to count as a live
+// speaking session (vs. user just sitting silent). Keep this short so a
+// brief pause between phrases doesn't reset the wedge clock unfairly.
+let silentWedgeAudioRecencySec: Double = 5.0
 
 let pausePollInterval: TimeInterval = 0.15
 let watchdogPollInterval: TimeInterval = 5.0
@@ -96,10 +119,28 @@ final class AtomicInt {
     func increment() { lock.lock(); value &+= 1; lock.unlock() }
 }
 
+// Lock-protected timestamp (seconds since 1970) shared with the watchdog
+// thread. Used by the silent-wedge detector to compare the most recent
+// recognition event against the most recent buffer of real (non-silent)
+// audio.
+final class AtomicDouble {
+    private var value: Double
+    private let lock = NSLock()
+    init(_ v: Double) { self.value = v }
+    func get() -> Double { lock.lock(); defer { lock.unlock() }; return value }
+    func set(_ v: Double) { lock.lock(); value = v; lock.unlock() }
+}
+
 let speakIsPlaying = AtomicBool(false)
 let bufferReceivedCount = AtomicInt(0)   // bumped on the audio thread (pre-dispatch)
 let bufferProcessedCount = AtomicInt(0)  // bumped on the listener serial queue
 let sessionStartTime = Date()
+// Silent-wedge tracking. lastEventTime starts "now" so we don't false-trip
+// during the first silentWedgeMaxSec of the session. lastSpeechAudioTime
+// starts at 0 so the watchdog won't think audio is active until we've
+// actually seen a non-silent buffer.
+let lastEventTime = AtomicDouble(Date().timeIntervalSince1970)
+let lastSpeechAudioTime = AtomicDouble(0)
 
 // Watchdog: detect a wedged listener serial queue and force a process exit
 // so the dispatch wrapper can respawn us. The classic failure mode is
@@ -126,6 +167,25 @@ func startWatchdog() {
                 // Flush stderr before bailing
                 try? FileHandle.standardError.synchronize()
                 exit(99)
+            }
+
+            // Silent-wedge check: live speech audio is being captured but
+            // SFSpeech has stopped emitting recognition events. Skip while
+            // afplay (the cloned voice) is paused since we deliberately
+            // cancel the task in that state.
+            if !speakIsPlaying.get() {
+                let now = Date().timeIntervalSince1970
+                let lastAud = lastSpeechAudioTime.get()
+                let lastEvt = lastEventTime.get()
+                let timeSinceAudio = now - lastAud
+                let timeSinceEvent = now - lastEvt
+                if lastAud > 0
+                   && timeSinceAudio < silentWedgeAudioRecencySec
+                   && timeSinceEvent > silentWedgeMaxSec {
+                    log(String(format: "WATCHDOG: silent wedge — audio active %.1fs ago but no recognition events for %.1fs, exiting 99 for respawn", timeSinceAudio, timeSinceEvent))
+                    try? FileHandle.standardError.synchronize()
+                    exit(99)
+                }
             }
 
             let age = Date().timeIntervalSince(sessionStartTime)
@@ -245,6 +305,11 @@ final class Listener {
 
     // Must be called on self.queue
     private func handleResult(result: SFSpeechRecognitionResult?, error: Error?) {
+        // Heartbeat for the silent-wedge watchdog — any sign of life from
+        // SFSpeech (partial, final, or non-cancelled error) counts.
+        if result != nil || (error as NSError?)?.code != 216 {
+            lastEventTime.set(Date().timeIntervalSince1970)
+        }
         if let result = result {
             let txt = result.bestTranscription.formattedString
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -293,6 +358,24 @@ final class Listener {
         // If this stops growing while bufferReceivedCount keeps growing,
         // the listener queue is wedged and the watchdog will exit(99).
         bufferProcessedCount.increment()
+
+        // Track real-audio recency for the silent-wedge watchdog. Cheap
+        // max-abs scan over the buffer (≤1024 frames) — anything above the
+        // threshold means the user is actually making noise into the mic.
+        if !speakIsPlaying.get(), let chans = buffer.floatChannelData {
+            let frames = Int(buffer.frameLength)
+            if frames > 0 {
+                let samples = chans[0]
+                var maxAbs: Float = 0
+                for i in 0..<frames {
+                    let v = abs(samples[i])
+                    if v > maxAbs { maxAbs = v }
+                }
+                if maxAbs >= silentWedgeAudioThreshold {
+                    lastSpeechAudioTime.set(Date().timeIntervalSince1970)
+                }
+            }
+        }
 
         // If the cloned voice is playing, drop the buffer and cancel any
         // in-progress utterance so we don't capture our own audio.
