@@ -49,8 +49,16 @@ if [ -z "$WIN_ID" ]; then
     exit 1
 fi
 
-# Hand the text to AppleScript via env var so we don't have to escape
-# quotes / backslashes / newlines into the script body.
+# Two-stage submission:
+#   1. `do script` writes the text + \n to the pty. Most of the time the
+#      TUI treats that \n as Enter and the message submits, but Claude Code
+#      occasionally swallows the \n — usually when it's mid-stream rendering
+#      a previous response — and the user has to press Return manually.
+#   2. As a guarantee, immediately after the write, ask System Events to
+#      press a real Return key (key code 36). This only fires when Terminal
+#      is the frontmost app, so it can't accidentally submit input in
+#      another app if the user has tabbed away. When Terminal IS frontmost
+#      (the normal voice-work case), it forces submit reliably.
 RESULT=$(INJECT_TEXT="$TEXT" /usr/bin/osascript \
     -e 'on run' \
     -e '  set targetText to (system attribute "INJECT_TEXT")' \
@@ -67,6 +75,13 @@ RESULT=$(INJECT_TEXT="$TEXT" /usr/bin/osascript \
     -e '    end repeat' \
     -e '    if targetWin is missing value then return "missing"' \
     -e '    do script targetText in selected tab of targetWin' \
+    -e '  end tell' \
+    -e '  delay 0.08' \
+    -e '  tell application "System Events"' \
+    -e '    try' \
+    -e '      set frontApp to name of first application process whose frontmost is true' \
+    -e '      if frontApp is "Terminal" then key code 36' \
+    -e '    end try' \
     -e '  end tell' \
     -e '  return "ok"' \
     -e 'end run' 2>&1)

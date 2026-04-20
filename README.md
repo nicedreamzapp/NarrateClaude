@@ -4,6 +4,7 @@
   <p align="center"><em>🪴 Step one of an ambient-computing journey. Work while playing. The keyboard is optional.</em></p>
   <p align="center">
     <a href="https://github.com/nicedreamzapp/NarrateClaude/stargazers"><img src="https://img.shields.io/github/stars/nicedreamzapp/NarrateClaude?style=for-the-badge&logo=github&color=f5c542&labelColor=1f2328" alt="GitHub stars"></a>
+    <a href="https://github.com/sponsors/nicedreamzapp"><img src="https://img.shields.io/github/sponsors/nicedreamzapp?style=for-the-badge&logo=githubsponsors&color=ea4aaa&labelColor=1f2328&label=%E2%9D%A4%20Sponsor" alt="Sponsor"></a>
     <img src="https://img.shields.io/badge/🎙️_Speak-To_Your_Mac-orange?style=for-the-badge" alt="Speak">
     <img src="https://img.shields.io/badge/🔊_Listen-In_Your_Voice-blueviolet?style=for-the-badge" alt="Listen">
     <img src="https://img.shields.io/badge/🪴_Ambient-Computing-ff69b4?style=for-the-badge" alt="Ambient">
