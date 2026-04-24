@@ -12,6 +12,7 @@
     <img src="https://img.shields.io/badge/🍎_macOS-Apple_Silicon-lightgrey?style=for-the-badge" alt="macOS">
     <img src="https://img.shields.io/badge/✈️_Works-On_A_Plane-9cf?style=for-the-badge" alt="Offline">
     <a href="LICENSE"><img src="https://img.shields.io/badge/📜_MIT-Free_Forever-yellow?style=for-the-badge" alt="MIT"></a>
+    <a href="https://discord.gg/ZdSqgAxUW"><img src="https://img.shields.io/discord/1497121921580404818?label=NiceDreamzApps&logo=discord&color=5865F2&style=for-the-badge" alt="Join the NiceDreamzApps Discord"></a>
   </p>
 </p>
 
@@ -445,6 +446,18 @@ Think of it as hi-fi audio gear: the speakers and the amplifier are separate com
 - 🎤 **Pocket TTS** — the cloned-voice synthesizer I use on the output side. Any compatible TTS works, but this is what I reach for.
 - 🤖 **Anthropic + Claude Code** — the AI coding tool this voice loop was built to talk to
 - 🎙️ **Every "voice AI" demo that's secretly a cloud pipeline** — thanks for leaving this gap unfilled, I guess
+
+---
+
+## 💬 Community
+
+Builders running, contributing to, or hacking on `NarrateClaude`, `claude-code-local`, and `browser-agent` hang out in a small Discord. Quiet, builder-tone, no bots.
+
+<p align="center">
+  <a href="https://discord.gg/ZdSqgAxUW"><img src="https://img.shields.io/discord/1497121921580404818?label=Join%20NiceDreamzApps%20on%20Discord&logo=discord&color=5865F2&style=for-the-badge" alt="Join the NiceDreamzApps Discord"></a>
+</p>
+
+👉 **[discord.gg/ZdSqgAxUW](https://discord.gg/ZdSqgAxUW)**
 
 ---
 
