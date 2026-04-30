@@ -30,6 +30,28 @@
 
 ---
 
+## 🌐 New — Ohm: the same voice loop, in any browser
+
+> **You don't need this Mac to talk to me anymore. Any browser does it now.**
+
+The local-first voice loop you'll see below was the first version — wake-word on the Mac, all on-device. **Ohm** is the next step: a chat panel at `hq.nicedreamzwholesale.com/ohm` that you can hit from any browser on any device. Type a question. Hit a 🔊 Narrate toggle. The reply comes back **out loud, in your own cloned voice**, through whatever browser you're in.
+
+🎬 **Watch the 53-second demo:** [cdsi.click/ohm-demo.mp4](https://cdsi.click/ohm-demo.mp4)
+
+How it works under the hood (zero cloud-AI cost):
+
+- **Browser** → hits a small VPS that proxies the chat
+- **VPS** → forwards the message through a self-hosted web shell (FiaOS) to my Mac mini at home
+- **Mac mini** → runs Claude Code on my own Max plan and answers
+- **Reply** → pipes back through the same bridge to a local TTS server cloning my voice
+- **Audio** → streams back as a `.wav` and plays in your browser
+
+No big tech cloud. No paid AI API. The Max plan is already paid; nothing else costs anything per call. **Ambient computing means the computer is around you, not in front of you** — phone, laptop, car browser — same agent, same voice, same ease.
+
+> 🪴 *NarrateClaude is the on-device version. Ohm is the everywhere version. They share the same voice clone and the same philosophy: own your ears, own your mouth, own your AI.*
+
+---
+
 ## ✨ TL;DR
 
 > 💬 **You:** *"Hey, read my project notes and tell me what's important."*
