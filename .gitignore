@@ -15,3 +15,12 @@ dictation/state/
 # Logs
 *.log
 *.log.*
+
+# Swift build products and vendored checkouts
+# dictation-v2 is a 7.5 GB local working tree (1,794 training wavs, Swift
+# build products, vendored deps). Its source deserves its own repo, not this one.
+dictation-v2/
+
+# virtualenvs anywhere
+**/.venv/
+**/__pycache__/

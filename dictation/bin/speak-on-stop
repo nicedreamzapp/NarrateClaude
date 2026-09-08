@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""speak-on-stop — Claude Code Stop hook for NarrateClaude.
+
+Fires every time Claude finishes responding. Pulls the last assistant
+message from the transcript JSONL, scrubs out code/markdown noise that
+sounds bad spoken, and pipes the result through Kokoro-82M Heart (af_heart)
+via ~/.local/bin/speak. So Matt never has to look at the
+terminal to know what Claude said.
+
+Stays out of its own way:
+- Silent on any error (don't crash the session).
+- Skips empty or pure-tool-call turns.
+- Truncates anything over MAX_LEN with "...and there's more on screen"
+  so a 20-paragraph dump doesn't read for five minutes.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+SPEAK = "/Users/dtribe/.local/bin/speak"
+MAX_LEN = 1200
+
+# Master switch: the hook stays registered permanently, but only speaks
+# while this flag file exists. "narration on" touches it, "narration off"
+# removes it — instant toggle, no settings.json edits, no session reload.
+FLAG = "/Users/dtribe/.claude/narration.on"
+
+
+def _extract_assistant_text(transcript_path: str) -> str:
+    """Walk backwards through the JSONL transcript and return the most
+    recent assistant message's plain text. Returns '' if none found."""
+    p = Path(transcript_path)
+    if not p.exists():
+        return ""
+    try:
+        lines = p.read_text(errors="replace").splitlines()
+    except Exception:
+        return ""
+    for raw in reversed(lines):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            ev = json.loads(raw)
+        except Exception:
+            continue
+        # Common transcript shapes — be permissive about which key wraps the
+        # message.
+        msg = ev.get("message") or ev
+        role = ev.get("role") or msg.get("role") or ev.get("type")
+        if role != "assistant":
+            continue
+        content = msg.get("content")
+        if isinstance(content, list):
+            parts = []
+            for b in content:
+                if isinstance(b, dict) and b.get("type") == "text":
+                    parts.append(b.get("text", ""))
+            text = "\n".join(parts).strip()
+        elif isinstance(content, str):
+            text = content.strip()
+        else:
+            text = ""
+        if text:
+            return text
+    return ""
+
+
+def _scrub_for_tts(text: str) -> str:
+    """Strip out things that sound bad read aloud."""
+    # Fenced code blocks → a brief marker
+    text = re.sub(r"```[\s\S]*?```", " [code block on screen] ", text)
+    # Inline code, bold, italic markers
+    text = re.sub(r"`([^`]+)`", r"\1", text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"\*([^*]+)\*", r"\1", text)
+    # Bullet markers at start of lines
+    text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+    # Heading markers
+    text = re.sub(r"^\s*#+\s*", "", text, flags=re.MULTILINE)
+    # URLs (just say "link")
+    text = re.sub(r"https?://\S+", "link", text)
+    # File paths sound terrible read literally — replace with "a file"
+    text = re.sub(r"(?:/[\w\.\-]+){2,}", "a file", text)
+    # Collapse whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def main() -> int:
+    if not os.path.exists(FLAG):
+        return 0
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        return 0
+    transcript_path = payload.get("transcript_path") or payload.get("transcriptPath") or ""
+    if not transcript_path:
+        return 0
+    text = _extract_assistant_text(transcript_path)
+    if not text:
+        return 0
+    text = _scrub_for_tts(text)
+    if not text:
+        return 0
+    if len(text) > MAX_LEN:
+        text = text[:MAX_LEN].rsplit(" ", 1)[0] + "… and there's more on screen."
+    if not os.path.exists(SPEAK):
+        return 0
+    try:
+        subprocess.Popen([SPEAK, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

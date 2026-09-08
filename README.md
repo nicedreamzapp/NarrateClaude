@@ -104,6 +104,46 @@ That's the bet. **Want to build it with me?** 🤝
 
 ---
 
+## 🪄 Coming in 2.0 — "Talking Stick" Mode
+
+> 🗣️ **A real full-duplex voice agent that you can interrupt mid-sentence the way you'd interrupt a person.**
+
+NarrateClaude 1.0 is half-duplex — you talk, then it talks, then you talk. Polite, but it doesn't feel like a conversation. **Talking Stick mode is the next gear.** Start talking while your Mac is mid-reply and it'll stop talking, listen, and pivot — same as a human would when you cut them off.
+
+### 🥷 Why nobody else has shipped this for a personal user
+
+Big AI companies optimize barge-in for **everyone on Earth**. We're optimizing it for **one human at a time**. That asymmetry is the entire research opening.
+
+Two structural advantages no public voice agent has:
+
+1. 🎯 **We know the exact TTS signal we just played.** Piper generates the WAV before it hits the speaker — we have the reference signal byte-for-byte, not an estimate. That's the unlock for real acoustic echo cancellation at the hardware abstraction layer.
+2. 👤 **Your voiceprint is pre-enrolled.** A speaker embedding for your voice already lives on disk. The VAD can be conditioned on **you specifically** — so it fires when *you* speak and ignores everything else: the assistant's own playback bleeding through the mic, the dog, the kid in the next room, the TV playing a podcast in the background.
+
+The big players can't ship either of these things, because they don't know who you are in advance. We do.
+
+### 🧠 The 128 GB Apple Silicon edge
+
+This work is being prototyped on an **M5 Max with 128 GB unified memory**. Most indie AI researchers don't have the hardware to fine-tune a full-duplex audio model on personal voice data — they're stuck consuming whatever the big labs release. With 128 GB unified memory and the Neural Engine, **fine-tuning a 7B+ audio model on your own voice + your own TTS is actually feasible on one machine.** That's the unfair advantage on the moonshot phase.
+
+### 🔧 What's being built right now
+
+- 🎚️ **Apple VPIO at the HAL** — `setVoiceProcessingEnabled(true)` on the same `AVAudioEngine` that owns the mic, with Piper TTS routed through an `AVAudioPlayerNode` on that same engine. That's the configuration Apple's own echo canceller actually needs to work — the reference signal has to be in-band, not out on `afplay`.
+- 👂 **FluidAudio Silero VAD on the Apple Neural Engine** — sub-100ms speech-onset detection pinned to the ANE so it's basically free. When it fires while TTS is playing, the player node dies and the assistant shuts up immediately.
+- 🧬 **Personal VAD head conditioned on your voiceprint** — HyWA-style hypernetwork that generates a personalized weight set from your pre-enrolled speaker embedding. The publishable contribution. Anything that isn't *your* voice never fires the barge-in.
+- 🎬 **Smart Turn v3 for end-of-turn prediction** — replaces the 2.5-second "stopped changing" heuristic with a learned classifier that knows the difference between "I'm thinking mid-sentence" and "I'm done, your turn."
+- 🚀 **Phase 5 moonshot — joint full-duplex fine-tune** — fine-tune Moshi or SALMONN-omni on a corpus of `(your_voice, piper_tts)` pairs and swallow the whole AEC/VAD/EOT pipeline into one end-to-end audio model. The 128 GB Apple Silicon angle is load-bearing here.
+
+### 📜 The receipts
+
+This isn't a "wouldn't it be cool if…" pitch. It's the fourth attempt, informed by three failures with reasons logged:
+
+- 📐 **[`EXPERIMENT_PLAN.md`](EXPERIMENT_PLAN.md)** — the technical north star. Architecture diagram, phases, success metrics for each phase, demo talking points.
+- 🧪 **[`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md)** — every barge-in attempt to date with what worked, what didn't, and *why*. So future-you (or future-contributor) doesn't waste a weekend on a known dead end.
+
+Active code lives in [`dictation-v2/`](dictation-v2/) as a Swift Package. v1 stays running and untouched until v2 is benchmarked head-to-head and proven.
+
+---
+
 ## 🤔 Wait, What?
 
 ### 🎯 The simple version

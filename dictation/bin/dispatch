@@ -16,6 +16,14 @@ TARGET_FILE="$DICT_DIR/state/target.json"
 LOG_FILE="$DICT_DIR/state/dictation.log"
 ERR_LOG="$DICT_DIR/state/dictation.log.stderr"
 INJ_LOG="$DICT_DIR/state/dictation.log.inject"
+
+# Voiceprint filter — only Matt's utterances make it past this stage.
+# If the venv or voiceprint hasn't been built yet, dispatch falls back to
+# a passthrough so the pipeline still works while the filter is set up.
+FILTER_DIR="$DICT_DIR/filter"
+FILTER_PY="$FILTER_DIR/filter.py"
+FILTER_VENV="$FILTER_DIR/.venv/bin/python"
+VOICEPRINT_FILE="$DICT_DIR/state/voiceprint.npy"
 # When the watchdog notices the bound Terminal window is gone, it touches
 # this flag instead of relying on signal delivery. The outer respawn loop
 # checks the flag before each iteration and exits cleanly. Without this,
@@ -124,7 +132,33 @@ while true; do
     echo "[$(ts)] dispatch: starting listener (attempt $respawn_count)" >> "$LOG_FILE"
     start_epoch=$(date +%s)
 
-    "$LISTEN_BIN" 2>>"$ERR_LOG" | while IFS= read -r line; do
+    # If the filter venv + voiceprint are both ready, route the listener
+    # through the python filter. Otherwise pass through unchanged so a
+    # half-set-up filter never strands transcription.
+    #
+    # Force arm64 when invoking python: dispatch can end up running under
+    # Rosetta (e.g. when its grandparent Terminal shell is x86_64), and a
+    # translated bash spawns its universal-binary python children in x86_64
+    # too. The filter's numpy/resemblyzer wheels are arm64-only, so without
+    # `arch -arm64` the very first `import numpy` aborts with an arch
+    # mismatch, the filter dies, and the listener crash-loops forever.
+    if [ -x "$FILTER_VENV" ] && [ -f "$FILTER_PY" ] && [ -f "$VOICEPRINT_FILE" ]; then
+        FILTER_CMD=(/usr/bin/arch -arm64 "$FILTER_VENV" "$FILTER_PY")
+    else
+        FILTER_CMD=(cat)
+    fi
+
+    # Stage 2: relevance filter — drops utterances that voiceprint passed
+    # but clearly aren't aimed at the AI (talking to a human/animal/phone).
+    # Uses system python — always available, no extra deps.
+    RELEVANCE_PY="$FILTER_DIR/relevance.py"
+    if [ -f "$RELEVANCE_PY" ]; then
+        RELEVANCE_CMD=(/usr/bin/python3 "$RELEVANCE_PY")
+    else
+        RELEVANCE_CMD=(cat)
+    fi
+
+    "$LISTEN_BIN" 2>>"$ERR_LOG" | "${FILTER_CMD[@]}" 2>>"$ERR_LOG" | "${RELEVANCE_CMD[@]}" 2>>"$ERR_LOG" | while IFS= read -r line; do
         [ -z "$line" ] && continue
         printf "[%s] %s\n" "$(ts)" "$line" >> "$LOG_FILE"
         "$INJECT_BIN" "$line" >> "$INJ_LOG" 2>&1 || true

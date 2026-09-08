@@ -43,11 +43,47 @@ fi
 TEXT="${TEXT%$'\n'}"
 [ -z "$TEXT" ] && exit 0
 
+# Noise gate. The 2026-05-21 live-test surfaced a keyboard-hijack symptom:
+# every Smart Turn EOT misfire would inject + auto-Enter, stomping on
+# anything Matt was actually typing. Two filters here:
+#
+#   1. Drop pure noise markers: WhisperKit emits "(keyboard clicking)",
+#      "(footsteps)", "(silence)", "[BLANK_AUDIO]" etc. on non-speech audio.
+#      We don't want any of those in the Claude session.
+#   2. Drop too-short fragments (< 3 words) UNLESS the line ends in "?"
+#      (so single-word questions like "Why?" still go through). Smart Turn
+#      occasionally chops mid-sentence; the resulting 1–2 word fragment is
+#      almost never a complete thought and isn't worth submitting.
+#
+# Override the gate with INJECT_FORCE=1 if a caller really wants the text
+# through (e.g. the manual `dictation send` debug path).
+if [ "${INJECT_FORCE:-0}" != "1" ]; then
+    case "$TEXT" in
+        \(*\)|\[*\])
+            exit 0
+            ;;
+    esac
+    word_count=$(printf '%s' "$TEXT" | /usr/bin/awk '{print NF}')
+    last_char="${TEXT: -1}"
+    if [ "$word_count" -lt 3 ] && [ "$last_char" != "?" ]; then
+        exit 0
+    fi
+fi
+
 WIN_ID=$(/usr/bin/python3 -c "import json; print(json.load(open('$TARGET_FILE'))['window_id'])" 2>/dev/null)
 if [ -z "$WIN_ID" ]; then
     echo "inject: target.json missing window_id" >&2
     exit 1
 fi
+
+# Interrupt audio FIRST — kill anything that's currently speaking through
+# the speakers (afplay = the WAV player, piper = the synth, say = Apple TTS).
+# When Matt starts a new dictation, he wants Claude to shut up immediately.
+# These kills are idempotent and silent if nothing's running.
+pkill -f afplay 2>/dev/null
+pkill -f speak-stop-ui 2>/dev/null
+pkill -f "piper -m" 2>/dev/null; pkill -f "mlx_audio.tts.generate" 2>/dev/null
+pkill -x say 2>/dev/null
 
 # Two-stage submission:
 #   1. `do script` writes the text + \n to the pty. Most of the time the
@@ -74,15 +110,49 @@ RESULT=$(INJECT_TEXT="$TEXT" /usr/bin/osascript \
     -e '      end try' \
     -e '    end repeat' \
     -e '    if targetWin is missing value then return "missing"' \
-    -e '    do script targetText in selected tab of targetWin' \
     -e '  end tell' \
-    -e '  delay 0.08' \
+    -e '  -- Interrupt + Enter ONLY when the BOUND window is the focused one.' \
+    -e '  -- Previously this fired whenever Terminal was the frontmost app, which' \
+    -e '  -- let dictation from one terminal stomp ESC/Return into a different' \
+    -e '  -- terminal window the user was actively working in. Now we cross-' \
+    -e '  -- check the frontmost Terminal window id against targetWindowId and' \
+    -e '  -- bail if they differ (or if Terminal is not even frontmost).' \
+    -e '  set scopedToBound to false' \
     -e '  tell application "System Events"' \
     -e '    try' \
     -e '      set frontApp to name of first application process whose frontmost is true' \
-    -e '      if frontApp is "Terminal" then key code 36' \
+    -e '      if frontApp is "Terminal" then' \
+    -e '        tell application "Terminal"' \
+    -e '          try' \
+    -e '            if (id of front window as text) is (targetWindowId as text) then' \
+    -e '              set scopedToBound to true' \
+    -e '            end if' \
+    -e '          end try' \
+    -e '        end tell' \
+    -e '      end if' \
     -e '    end try' \
     -e '  end tell' \
+    -e '  if scopedToBound then' \
+    -e '    tell application "System Events" to key code 53' \
+    -e '  end if' \
+    -e '  delay 0.12' \
+    -e '  tell application "Terminal"' \
+    -e '    do script targetText in selected tab of targetWin' \
+    -e '  end tell' \
+    -e '  delay 0.08' \
+    -e '  if scopedToBound then' \
+    -e '    tell application "System Events" to key code 36' \
+    -e '  else' \
+    -e '    -- Window not focused: System Events Return is off-limits (it would' \
+    -e '    -- type into whatever app IS focused), but `do script` writes straight' \
+    -e '    -- to the bound tty regardless of focus. Send a bare newline as the' \
+    -e '    -- submit guarantee; if the first newline already submitted, an Enter' \
+    -e '    -- on an empty Claude prompt is a no-op.' \
+    -e '    delay 0.25' \
+    -e '    tell application "Terminal"' \
+    -e '      do script "" in selected tab of targetWin' \
+    -e '    end tell' \
+    -e '  end if' \
     -e '  return "ok"' \
     -e 'end run' 2>&1)
 
