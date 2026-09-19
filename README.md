@@ -500,12 +500,21 @@ Think of it as hi-fi audio gear: the speakers and the amplifier are separate com
 
 ---
 
+## 🧭 Other ways to do this
+
+Voice on the Mac has a lot of good people working on it. If you want to build your own loop, or swap a piece of this one:
+
+- **[whisper.cpp](https://github.com/ggml-org/whisper.cpp)** runs OpenAI's Whisper locally and fast on Apple Silicon. A strong alternative to Apple's recognizer, especially for accents and technical words.
+- **[RealtimeSTT](https://github.com/KoljaB/RealtimeSTT)** is a low-latency speech-to-text library with voice activity detection and wake words built in. Good if you want a listener in Python.
+- **[mlx-audio](https://github.com/Blaizzy/mlx-audio)** does text-to-speech, speech-to-text and speech-to-speech on MLX. Plenty of voices to plug into `~/.local/bin/speak`.
+
+---
+
 ## 🙏 Credits
 
 - 🍎 **Apple** — `SFSpeechRecognizer` is a legitimately good on-device speech engine that's been sitting in macOS for years, mostly unused by the indie AI scene. Thanks for shipping it.
-- 🎤 **Pocket TTS** — the cloned-voice synthesizer I use on the output side. Any compatible TTS works, but this is what I reach for.
+- 🎤 **[Pocket TTS](https://github.com/kyutai-labs/pocket-tts)** by Kyutai — the cloned-voice synthesizer I use on the output side. Any compatible TTS works, but this is what I reach for.
 - 🤖 **Anthropic + Claude Code** — the AI coding tool this voice loop was built to talk to
-- 🎙️ **Every "voice AI" demo that's secretly a cloud pipeline** — thanks for leaving this gap unfilled, I guess
 
 ---
 
