@@ -16,6 +16,27 @@
   </p>
 </p>
 
+**NarrateClaude is a hands-free voice loop for Claude Code on macOS: it transcribes your speech on-device with Apple's speech engine, types it into the Terminal window running `claude`, and speaks the replies through whatever voice you plug into `~/.local/bin/speak`.**
+
+**Proof:** there is no demo video or screenshot in the repo yet. What is here is the working v1 code (listed below) and an engineering log, [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), that records seven echo-cancellation attempts with what failed, why, and the measured results (for example 58 dB offline echo reduction for WebRTC AEC3 vs 29.5 dB for Speex).
+
+## 🔧 What I built (Matt Macosko)
+
+| Part | File |
+|---|---|
+| 🎧 Continuous listener. Ends a sentence when the text stops changing for 2.5 s, pauses while `afplay` is playing, exits for a respawn when the recognizer wedges | [`dictation/src/Listen.swift`](dictation/src/Listen.swift) |
+| 🔁 Supervisor: respawn loop, 3-second window watchdog, pipes listener → filters → injector | [`dictation/bin/dispatch`](dictation/bin/dispatch) |
+| ⌨️ Injector: types each sentence into the bound Terminal window via AppleScript, cuts off any speech that is playing, drops noise and fragments | [`dictation/bin/inject`](dictation/bin/inject) |
+| 🎛️ Control CLI (`setup`, `start`, `stop`, `status`, `toggle`, `tail`, `uninstall`) with a launcher gate | [`dictation/bin/dictation`](dictation/bin/dictation) |
+| 🖱️ One-click launcher: opens Terminal, starts `claude`, binds the mic to that window | [`narrative-claude.sh`](narrative-claude.sh) |
+| 🙉 "Was that for me?" filter: `claude tune out` / `tune in` mute, pet-talk regexes, and a local LLM judge that fails open | [`dictation/filter/relevance.py`](dictation/filter/relevance.py) |
+| 👤 Voiceprint filter and enrollment script (not active with the v1 listener yet, see Known limits) | [`dictation/filter/filter.py`](dictation/filter/filter.py), [`enroll.py`](dictation/filter/enroll.py) |
+| 🔊 Claude Code Stop hook that reads the last reply aloud | [`dictation/bin/speak-on-stop`](dictation/bin/speak-on-stop) |
+| 🎭 The always-narrate persona | [`CLAUDE.md`](CLAUDE.md) |
+| 📐 Research and experiment logs for the 2.0 barge-in work | [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), [`EXPERIMENT_PLAN.md`](EXPERIMENT_PLAN.md), [`RESEARCH_2026_05_21.md`](RESEARCH_2026_05_21.md) |
+
+**Upstream, not mine:** Apple's Speech framework (`SFSpeechRecognizer`), [Claude Code](https://github.com/anthropics/claude-code) by Anthropic, [Resemblyzer](https://github.com/resemble-ai/Resemblyzer) for voiceprints, [MLX](https://github.com/ml-explore/mlx) running Meta's Llama-3.2-3B as the relevance judge, and [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) by Kyutai for my cloned voice. Full list in [`CREDITS.md`](CREDITS.md).
+
 > ## 🧩 You're looking at the **EARS + MOUTH** of a three-repo local-first ambient-computing stack
 >
 > Pair it with its sibling repos for the full experience:
@@ -33,6 +54,8 @@
 ## 🌐 New — Ohm: the same voice loop, in any browser
 
 > **You don't need this Mac to talk to me anymore. Any browser does it now.**
+>
+> *Ohm is a separate project. Its code is not in this repo.*
 
 The local-first voice loop you'll see below was the first version — wake-word on the Mac, all on-device. **Ohm** is the next step: a private chat panel I host on my own infrastructure that I can hit from any browser, on any device. Type a question. Hit a 🔊 Narrate toggle. The reply comes back **out loud, in your own cloned voice**, through whatever browser I'm in.
 
@@ -62,7 +85,7 @@ No big tech cloud. No paid AI API. The Max plan is already paid; nothing else co
 
 **That whole conversation happens without touching the internet.** 🔒 No cloud. No API bills. No one listening in. Works on a plane. Works in a vault. Works when your Wi-Fi dies.
 
-Your voice goes into Apple's built-in speech engine (the same one that powers macOS Dictation, but running continuously). The text gets handed to a local AI model on your Mac. The model's reply comes out through a cloned copy of **your own voice**. And the mic is smart enough to not listen to itself talking — so there's no weird feedback loops.
+Your voice goes into Apple's built-in speech engine (the same one that powers macOS Dictation, but running continuously). The text gets typed into Claude Code, which you can point at a local AI model on your Mac with [claude-code-local](https://github.com/nicedreamzapp/claude-code-local). The model's reply comes out through a cloned copy of **your own voice**. And the mic is smart enough to not listen to itself talking — so there's no weird feedback loops.
 
 It's Siri, if Siri was actually private, actually smart, and actually sounded like you.
 
@@ -135,12 +158,14 @@ This work is being prototyped on an **M5 Max with 128 GB unified memory**. Most 
 
 ### 📜 The receipts
 
-This isn't a "wouldn't it be cool if…" pitch. It's the fourth attempt, informed by three failures with reasons logged:
+This isn't a "wouldn't it be cool if…" pitch. It has seven logged attempts so far, each with what worked, what didn't, and why:
 
 - 📐 **[`EXPERIMENT_PLAN.md`](EXPERIMENT_PLAN.md)** — the technical north star. Architecture diagram, phases, success metrics for each phase, demo talking points.
 - 🧪 **[`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md)** — every barge-in attempt to date with what worked, what didn't, and *why*. So future-you (or future-contributor) doesn't waste a weekend on a known dead end.
 
-Active code lives in [`dictation-v2/`](dictation-v2/) as a Swift Package. v1 stays running and untouched until v2 is benchmarked head-to-head and proven.
+Status, per the log: Apple VPIO did not hold up (attempts 1 and 5). The setup that worked live is WebRTC AEC3 plus a Silero energy gate (attempt 7). The personal VAD head loads but misfired in live use, so it is switched off until it is retrained.
+
+The v2 code lives in a local `dictation-v2/` Swift Package that is **not published in this repo** (it is in `.gitignore`). Everything you can run from this repo is v1.
 
 ---
 
@@ -171,7 +196,7 @@ But the listening side is general-purpose — it'll drive **any** command-line t
 │      ↓                                                       │
 │   4. 💬  You speak naturally: "Check my email for urgent"   │
 │      ↓                                                       │
-│   5. ⏸️  You stop talking for ~2 seconds                    │
+│   5. ⏸️  You stop talking for ~2.5 seconds                  │
 │      ↓                                                       │
 │   6. ✨  Your words appear in the Terminal automatically    │
 │      ↓                                                       │
@@ -195,10 +220,10 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 | | 😴 **Cloud Voice AI** (Alexa, Siri, Google, ChatGPT Voice) | 🚀 **NarrateClaude** |
 |---|---|---|
 | 🎙️ **Your voice goes to…** | Their servers | Nowhere. Stays on your Mac. |
-| 🧠 **AI thinking happens on…** | Their servers | Your Mac (local model) |
+| 🧠 **AI thinking happens on…** | Their servers | Your Mac, when `claude` points at a local model |
 | 🔊 **The voice you hear is…** | Some stranger's synthesized voice | **Your own cloned voice** |
 | ✈️ **Works on a plane?** | ❌ No Wi-Fi = no assistant | ✅ Yes, forever |
-| 💰 **Monthly cost** | $$ API fees / subscriptions | **$0. Forever.** |
+| 💰 **Monthly cost** | $$ API fees / subscriptions | **$0. Forever.** (with a local model) |
 | 🔒 **Privacy** | Whatever their privacy policy says today | **Absolute** |
 | 🎧 **Trained on your data?** | Maybe. Probably. Who knows. | **Never.** |
 | 🛑 **Company can shut it off?** | Yes | No — it's just your Mac |
@@ -218,7 +243,7 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 │         ▼                                                       │
 │    🎧 listen  (listens continuously, on-device)                 │
 │       • Apple's built-in speech engine                          │
-│       • Waits for ~2 seconds of "done talking" before typing    │
+│       • Waits for ~2.5 seconds of "done talking" before typing  │
 │       • Pauses itself when your Mac is speaking (no feedback!)  │
 │         │                                                       │
 │         ▼                                                       │
@@ -252,7 +277,9 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 - 🛠️ **Xcode command-line tools** — install with `xcode-select --install` if you haven't already (free, ~1 minute)
 - 🎤 **A microphone** (built-in is fine)
 - 🔊 **A TTS voice** — your cloned voice if you have one, or macOS's built-in `say` command as a free starter
-- 🤖 **[claude-code-local](https://github.com/nicedreamzapp/claude-code-local)** — the local AI coding side of the setup. Optional but highly recommended.
+- 🤖 **[Claude Code](https://github.com/anthropics/claude-code)** installed, so `claude` runs in Terminal
+- 🤖 **[claude-code-local](https://github.com/nicedreamzapp/claude-code-local)** — the local AI coding side of the setup. Optional but highly recommended. Without it, `claude` talks to Anthropic's servers, so the "zero internet" part only holds with a local model.
+- 📁 **Clone to `~/NarrateClaude`.** The launcher has that path hard-coded.
 
 ### 🚀 Install in 3 commands
 
@@ -264,7 +291,8 @@ cd ~/NarrateClaude
 # 2. Make everything runnable
 chmod +x dictation/bin/* narrative-claude.sh
 
-# 3. Compile the listener and bind it to your current Terminal window
+# 3. Start `claude` in Apple Terminal first, then compile the listener
+#    and bind it to that window (setup looks for a window running claude)
 ./dictation/bin/dictation setup
 ```
 
@@ -278,7 +306,11 @@ That's it. ✅
 mkdir -p ~/.local/bin
 cat > ~/.local/bin/speak <<'EOF'
 #!/bin/bash
-say "$@"
+# Render to a file and play it with afplay: the listener only mutes the
+# mic while afplay is running, so plain `say` would hear itself.
+f="${TMPDIR:-/tmp}/speak.$$.aiff"
+say -o "$f" "$@" && afplay "$f"
+rm -f "$f"
 EOF
 chmod +x ~/.local/bin/speak
 ```
@@ -287,11 +319,20 @@ Done. Your Mac will now speak replies using macOS's built-in voice. Not your voi
 
 **Option B — Your own cloned voice (the real fun)**
 
-Point `~/.local/bin/speak` at whatever TTS tool you want: Pocket TTS, Piper, local ElevenLabs, your own voice clone from any service that runs offline. Any script that takes a string and plays audio works — we're not picky.
+Point `~/.local/bin/speak` at whatever TTS tool you want: Pocket TTS, Piper, local ElevenLabs, your own voice clone from any service that runs offline. Any script that takes a string and plays audio works, as long as it plays through `afplay` (that is what the listener watches to mute the mic).
 
 ### 🎤 Grant microphone permission
 
 The first time you run the listener, macOS will ask for Microphone **and** Speech Recognition permission. **Approve both.** You'll only be asked once.
+
+### ⚠️ Known limits (v1, what's in this repo)
+
+- **Apple Terminal only.** The injector uses Terminal.app AppleScript. iTerm2, Warp and Ghostty don't work yet.
+- **No barge-in.** The mic is muted while `afplay` plays, so anything you say during a reply is dropped. The 2.0 work that fixes this is not published here.
+- **Very short commands get dropped.** Anything under 3 words is ignored unless it ends in `?` (so "yes" or "do it" won't go through).
+- **The voiceprint filter doesn't filter yet.** It needs an audio file per sentence and the v1 listener only emits text, so every line passes through.
+- **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190. If MLX or the model isn't installed, every line passes.
+- **`speak-on-stop` has my paths hard-coded** (`/Users/dtribe/...`). Edit `SPEAK` and `FLAG` at the top before using it as a Claude Code Stop hook.
 
 ---
 
@@ -313,8 +354,9 @@ Want a **Dock-friendly double-clickable icon**? See the [`.app` bundle recipe](#
 # Bind to the current Claude Code Terminal window
 ~/NarrateClaude/dictation/bin/dictation setup
 
-# Start listening
-~/NarrateClaude/dictation/bin/dictation start
+# Start listening (start is refused unless this variable names an
+# authorized launcher, so a stray call can't turn on your mic)
+NARRATE_DICTATION_LAUNCHER="NarrativeClaude.app" ~/NarrateClaude/dictation/bin/dictation start
 
 # See what it's hearing
 ~/NarrateClaude/dictation/bin/dictation tail
@@ -322,8 +364,8 @@ Want a **Dock-friendly double-clickable icon**? See the [`.app` bundle recipe](#
 # Stop listening
 ~/NarrateClaude/dictation/bin/dictation stop
 
-# Toggle on/off
-~/NarrateClaude/dictation/bin/dictation toggle
+# Toggle on/off (needs the same variable when it turns on)
+NARRATE_DICTATION_LAUNCHER="NarrativeClaude.app" ~/NarrateClaude/dictation/bin/dictation toggle
 ```
 
 ### <a name="optional-wrap-it-in-a-app-bundle"></a>📦 Optional: wrap it in a `.app` bundle
@@ -363,7 +405,7 @@ There's a small file at the root of this repo called `CLAUDE.md`. It tells your 
 
 That's the rule that makes the whole thing feel *alive*. Without it, the AI would do its work silently and only speak at the end, which feels weird and slow. With it, the AI narrates every step — *"Okay, I'm opening the file now... found 12 TODOs... let me look at the urgent ones..."* — so you're never wondering if it's thinking or frozen.
 
-If you're running [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), the `Narrative Gemma.command` launcher injects this file automatically. If you're running a different setup, point your own system-prompt flag at `~/NarrateClaude/CLAUDE.md` and you're good.
+The one-click launcher starts `claude` inside `~/NarrateClaude`, so Claude Code picks this file up as project instructions. If you're running [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), the `Narrative Gemma.command` launcher injects this file automatically. If you're running a different setup, point your own system-prompt flag at `~/NarrateClaude/CLAUDE.md` and you're good.
 
 ---
 
@@ -387,8 +429,8 @@ Fix: the listener watches for the TTS playback process (`afplay`) and **auto-pau
 
 Running continuous speech recognition for hours is a different problem from running it for 30 seconds in a demo. Apple's speech engine can get stuck, leak memory, or degrade over time. NarrateClaude defends against all of that:
 
-- 🚨 **Wedge detection** — if the listener's audio queue grows too big without progress, it assumes the speech engine is hung and exits. A supervisor restarts it fresh.
-- 🔄 **Preventive recycling** — every 10 minutes the listener exits cleanly and respawns. Stops slow degradation before it starts.
+- 🚨 **Wedge detection** — if the listener's audio queue grows too big without progress, or audio keeps arriving but the engine goes silent for 20 seconds, it assumes the speech engine is hung and exits. A supervisor restarts it fresh.
+- 🔄 **Preventive recycling** — every 5 minutes the listener exits cleanly and respawns. Stops slow degradation before it starts.
 - 🎯 **Strict window binding** — the dictation is tied to a specific Terminal window by window ID. If that window closes, the listener stops within ~5 seconds. No orphaned listeners.
 - 🔐 **Launch gating** — the start command refuses to run unless called by an authorized launcher (protects against random processes or typos unexpectedly turning on your mic).
 
@@ -400,8 +442,9 @@ Environment variables for when you want to fiddle:
 |---|---:|---|
 | `LISTEN_STABILITY_SEC` | 2.5 | How long the text needs to stop changing before we finalize a sentence |
 | `LISTEN_MAX_UTTER_SEC` | 60 | Hard cap on a single utterance (seconds) |
-| `LISTEN_MAX_SESSION_SEC` | 600 | Force a clean respawn every N seconds (preventive) |
+| `LISTEN_MAX_SESSION_SEC` | 300 | Force a clean respawn every N seconds (preventive) |
 | `LISTEN_WEDGE_BACKLOG` | 200 | Audio buffers piled up = engine is wedged, bail |
+| `LISTEN_SILENT_WEDGE_SEC` | 20 | Audio arriving but no recognition events this long = wedged, bail |
 | `LISTEN_DEBUG` | `0` | Set to `1` for noisy diagnostic logging |
 
 ---
