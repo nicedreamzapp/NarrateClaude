@@ -276,6 +276,7 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 - 🍎 **A Mac with Apple Silicon** (M1, M2, M3, M4, M5 — any of them)
 - 🛠️ **Xcode command-line tools** — install with `xcode-select --install` if you haven't already (free, ~1 minute)
 - 🎤 **A microphone** (built-in is fine)
+- 🗣️ **English speech.** The listener is hard-coded to the `en-US` recognizer (`dictation/src/Listen.swift`). It asks for on-device recognition when macOS reports that the recognizer supports it, so install the on-device dictation language data if macOS offers it.
 - 🔊 **A TTS voice** — your cloned voice if you have one, or macOS's built-in `say` command as a free starter
 - 🤖 **[Claude Code](https://github.com/anthropics/claude-code)** installed, so `claude` runs in Terminal
 - 🤖 **[claude-code-local](https://github.com/nicedreamzapp/claude-code-local)** — the local AI coding side of the setup. Optional but highly recommended. Without it, `claude` talks to Anthropic's servers, so the "zero internet" part only holds with a local model.
@@ -331,7 +332,7 @@ The first time you run the listener, macOS will ask for Microphone **and** Speec
 - **No barge-in.** The mic is muted while `afplay` plays, so anything you say during a reply is dropped. The 2.0 work that fixes this is not published here.
 - **Very short commands get dropped.** Anything under 3 words is ignored unless it ends in `?` (so "yes" or "do it" won't go through).
 - **The voiceprint filter doesn't filter yet.** It needs an audio file per sentence and the v1 listener only emits text, so every line passes through.
-- **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190. If MLX or the model isn't installed, every line passes.
+- **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190, but only if `~/.local/mlx-server/bin/python` exists (a Python with `mlx_lm` installed). If that isn't there or the model isn't downloaded, every line passes.
 - **`speak-on-stop` has my paths hard-coded** (`/Users/dtribe/...`). Edit `SPEAK` and `FLAG` at the top before using it as a Claude Code Stop hook.
 
 ---
