@@ -28,3 +28,6 @@ dictation-v2/
 # MkDocs build output and social card cache
 site/
 .cache/
+
+# pytest
+.pytest_cache/
