@@ -24,3 +24,7 @@ dictation-v2/
 # virtualenvs anywhere
 **/.venv/
 **/__pycache__/
+
+# MkDocs build output and social card cache
+site/
+.cache/
