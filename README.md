@@ -3,6 +3,7 @@
   <h3 align="center">Talk to your Mac. It talks back. In your own voice. Zero internet.</h3>
   <p align="center"><em>🪴 Step one of an ambient-computing journey. Work while playing. The keyboard is optional.</em></p>
   <p align="center">
+    <a href="https://github.com/nicedreamzapp/NarrateClaude/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/nicedreamzapp/NarrateClaude/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI&labelColor=1f2328" alt="CI"></a>
     <a href="https://github.com/nicedreamzapp/NarrateClaude/stargazers"><img src="https://img.shields.io/github/stars/nicedreamzapp/NarrateClaude?style=for-the-badge&logo=github&color=f5c542&labelColor=1f2328" alt="GitHub stars"></a>
     <a href="https://github.com/sponsors/nicedreamzapp"><img src="https://img.shields.io/github/sponsors/nicedreamzapp?style=for-the-badge&logo=githubsponsors&color=ea4aaa&labelColor=1f2328&label=%E2%9D%A4%20Sponsor" alt="Sponsor"></a>
     <img src="https://img.shields.io/badge/🎙️_Speak-To_Your_Mac-orange?style=for-the-badge" alt="Speak">
@@ -498,6 +499,17 @@ PRs and issues super welcome, especially if you want to:
 - 🐛 **Just tell me what's broken** — open an issue with the contents of `dictation/state/dictation.log` attached
 
 Small PRs welcome. Huge PRs welcome. Ideas-with-no-code welcome.
+
+### Running the tests
+
+The suite in [`tests/`](tests/) runs on Linux or macOS with no mic, no GPU, no model download and no network. Resemblyzer and the MLX judge are faked, and the bash scripts run against a temp copy of `dictation/`, so nothing touches your real `state/` or Terminal windows.
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same suite on Ubuntu with Python 3.9 and 3.13, and on macOS, where it also compiles `Listen.swift` and `MicProbe.swift` with `swiftc`.
 
 ---
 

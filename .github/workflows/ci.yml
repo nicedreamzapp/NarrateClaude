@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: tests (ubuntu, python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is what /usr/bin/python3 is on macOS, and dispatch runs
+        # relevance.py with it. 3.13 is current.
+        python: ["3.9", "3.13"]
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest
+
+  macos:
+    name: macOS (swiftc build + tests)
+    runs-on: macos-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - name: Compile the Swift listener and mic probe
+        run: |
+          swiftc --version
+          swiftc -O dictation/src/Listen.swift -o "$RUNNER_TEMP/listen"
+          swiftc -O dictation/src/MicProbe.swift -o "$RUNNER_TEMP/micprobe"
+
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install test dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest
