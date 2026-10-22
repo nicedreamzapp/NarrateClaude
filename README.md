@@ -15,13 +15,14 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/📜_MIT-Free_Forever-yellow?style=for-the-badge" alt="MIT"></a>
     <a href="https://discord.gg/ZdSqgAxUW"><img src="https://img.shields.io/discord/1497121921580404818?label=NiceDreamzApps&logo=discord&color=5865F2&style=for-the-badge" alt="Join the NiceDreamzApps Discord"></a>
   </p>
-</p>
+
+<a id="what"></a>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-banner.svg" width="100%" alt="01. What it is and what I built. A hands-free voice loop for Claude Code on macOS"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-r1.svg" width="100%" alt="Speak. Apple&#x27;s speech engine transcribes on-device. Listen. Replies are spoken back in your own cloned voice. Zero internet. No cloud, works on a plane."></picture>
 
 **NarrateClaude is a hands-free voice loop for Claude Code on macOS: it transcribes your speech on-device with Apple's speech engine, types it into the Terminal window running `claude`, and speaks the replies through whatever voice you plug into `~/.local/bin/speak`.**
 
 **Proof:** there is no demo video or screenshot in the repo yet. What is here is the working v1 code (listed below) and an engineering log, [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), that records seven echo-cancellation attempts with what failed, why, and the measured results (for example 58 dB offline echo reduction for WebRTC AEC3 vs 29.5 dB for Speex).
-
-## 🔧 What I built (Matt Macosko)
 
 | Part | File |
 |---|---|
@@ -50,9 +51,14 @@
 >
 > 👉 **[See how all three fit together below](#-the-complete-local-first-stack)**
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-rule.svg" width="100%" alt="">
 
-## 🌐 New — Ohm: the same voice loop, in any browser
+
+<a id="ohm"></a>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-banner.svg" width="100%" alt="02. Ohm and the short version. The same voice loop, in any browser"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-r1.svg" width="100%" alt="Ohm. Any browser can do it now. Ohm is a separate project. Private. No cloud, no API bills, no one listening in."></picture>
+
+### 🌐 New — Ohm: the same voice loop, in any browser
 
 > **You don't need this Mac to talk to me anymore. Any browser does it now.**
 >
@@ -72,9 +78,8 @@ No big tech cloud. No paid AI API. The Max plan is already paid; nothing else co
 
 > 🪴 *NarrateClaude is the on-device version. Ohm is the everywhere version. They share the same voice clone and the same philosophy: own your ears, own your mouth, own your AI.*
 
----
 
-## ✨ TL;DR
+### ✨ TL;DR
 
 > 💬 **You:** *"Hey, read my project notes and tell me what's important."*
 >
@@ -90,9 +95,12 @@ Your voice goes into Apple's built-in speech engine (the same one that powers ma
 
 It's Siri, if Siri was actually private, actually smart, and actually sounded like you.
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-rule.svg" width="100%" alt="">
 
-## 🪴 Why I Built This — Ambient Computing Starts Here
+
+<a id="why"></a>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-banner.svg" width="100%" alt="03. Why I built this. Ambient computing starts here, and what 2.0 brings"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-r1.svg" width="100%" alt="Ambient computing. The computer is around you, not in front of you. Work while playing. The keyboard is optional. Coming in 2.0. Talking Stick mode: interrupt it mid-sentence."></picture>
 
 > 💭 **I'm tired of being hunched over a screen with a mouse in my hand.**
 
@@ -126,9 +134,8 @@ But the north star is bigger than one mode on one Mac. It's a full ambient-compu
 
 That's the bet. **Want to build it with me?** 🤝
 
----
 
-## 🪄 Coming in 2.0 — "Talking Stick" Mode
+### 🪄 Coming in 2.0 — "Talking Stick" Mode
 
 > 🗣️ **A real full-duplex voice agent that you can interrupt mid-sentence the way you'd interrupt a person.**
 
@@ -168,9 +175,14 @@ Status, per the log: Apple VPIO did not hold up (attempts 1 and 5). The setup th
 
 The v2 code lives in a local `dictation-v2/` Swift Package that is **not published in this repo** (it is in `.gitignore`). Everything you can run from this repo is v1.
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-rule.svg" width="100%" alt="">
 
-## 🤔 Wait, What?
+
+<a id="how"></a>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-banner.svg" width="100%" alt="04. How it works. What it feels like, and the diagram"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-r1.svg" width="100%" alt="On-device. Your voice goes nowhere. It stays on your Mac. Your own voice. The reply is your cloned voice. $0. With a local model there are no monthly fees."></picture>
+
+### 🤔 Wait, What?
 
 ### 🎯 The simple version
 Most "AI voice assistants" — even the ones you're thinking of right now — send your voice to a server, wait for that server to transcribe it, wait for another server to think about it, wait for a third server to turn the answer back into audio, and then play it. **Every step leaves your house.** Every step costs money. Every step stops working the second your Wi-Fi drops.
@@ -182,9 +194,8 @@ By default, NarrateClaude is the *voice* half of a bigger setup: **[claude-code-
 
 But the listening side is general-purpose — it'll drive **any** command-line tool that lives in a Terminal window. Want to talk to a local database? Your text editor? A custom shell script? Same pipeline works.
 
----
 
-## 🎬 What It Feels Like
+### 🎬 What It Feels Like
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -214,9 +225,8 @@ But the listening side is general-purpose — it'll drive **any** command-line t
 
 No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the answer comes, listen. When you want to say something else, start talking again. The mic is smart enough to pause itself while your Mac is speaking so it doesn't accidentally hear its own voice and start replying to itself.
 
----
 
-## 🌈 Why This Is A Big Deal
+### 🌈 Why This Is A Big Deal
 
 | | 😴 **Cloud Voice AI** (Alexa, Siri, Google, ChatGPT Voice) | 🚀 **NarrateClaude** |
 |---|---|---|
@@ -231,9 +241,8 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 
 > 💡 **The crazy part:** Apple has been shipping the on-device speech engine that makes this possible with macOS for *years*. Almost nobody is wrapping it for continuous use with a local LLM. You're looking at one of the first projects that does. 🦄
 
----
 
-## 🔁 How The Magic Works (The Pretty Diagram)
+### 🔁 How The Magic Works (The Pretty Diagram)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -268,9 +277,12 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 └─────────────────────────────────────────────────────────────────┘
 ```
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-rule.svg" width="100%" alt="">
 
-## 🛠️ Setup (The 5-Minute Version)
+
+<a id="setup"></a>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-banner.svg" width="100%" alt="05. Setup and run. The five-minute version"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-r1.svg" width="100%" alt="3 commands. Clone, make runnable, set up. One click. Or use the one-click launcher. Mic permission. Grant it once."></picture>
 
 ### 📋 What you need first
 
@@ -336,9 +348,8 @@ The first time you run the listener, macOS will ask for Microphone **and** Speec
 - **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190, but only if `~/.local/mlx-server/bin/python` exists (a Python with `mlx_lm` installed). If that isn't there or the model isn't downloaded, every line passes.
 - **`speak-on-stop` has my paths hard-coded** (`/Users/dtribe/...`). Edit `SPEAK` and `FLAG` at the top before using it as a Claude Code Stop hook.
 
----
 
-## 🏃 Run It
+### 🏃 Run It
 
 ### 🖱️ The one-click way
 
@@ -399,9 +410,14 @@ PLIST
 
 🎨 Want a custom icon? Drop a `.icns` file at `$APP/Contents/Resources/AppIcon.icns` and add `<key>CFBundleIconFile</key><string>AppIcon</string>` to the plist.
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-rule.svg" width="100%" alt="">
 
-## 🎭 The "Always Narrating" Brain
+
+<a id="hood"></a>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-banner.svg" width="100%" alt="06. Under the hood and troubleshooting. Why it behaves the way it does"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-r1.svg" width="100%" alt="2.5 s of unchanged text ends a sentence. 5 min preventive listener respawn. 20 s of silence marks it wedged."></picture>
+
+### 🎭 The "Always Narrating" Brain
 
 There's a small file at the root of this repo called `CLAUDE.md`. It tells your local AI: **"Every reply must be spoken out loud. Narrate what you're doing in real time. Don't just sit there silently."**
 
@@ -409,9 +425,8 @@ That's the rule that makes the whole thing feel *alive*. Without it, the AI woul
 
 The one-click launcher starts `claude` inside `~/NarrateClaude`, so Claude Code picks this file up as project instructions. If you're running [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), the `Narrative Gemma.command` launcher injects this file automatically. If you're running a different setup, point your own system-prompt flag at `~/NarrateClaude/CLAUDE.md` and you're good.
 
----
 
-## 🤓 For the Curious — Under the Hood
+### 🤓 For the Curious — Under the Hood
 
 > Skip this section if you just want it to work. Keep reading if you like knowing *why*.
 
@@ -449,9 +464,8 @@ Environment variables for when you want to fiddle:
 | `LISTEN_SILENT_WEDGE_SEC` | 20 | Audio arriving but no recognition events this long = wedged, bail |
 | `LISTEN_DEBUG` | `0` | Set to `1` for noisy diagnostic logging |
 
----
 
-## 🧪 Something Not Working?
+### 🧪 Something Not Working?
 
 ### 🎤 "Speech recognition not authorized" or no mic input
 
@@ -486,9 +500,14 @@ swiftc -O MicProbe.swift -o /tmp/micprobe
 
 If the numbers stay at zero, macOS isn't letting the process access the mic — fix the permission first.
 
----
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-rule.svg" width="100%" alt="">
 
-## 🤝 Contributing
+
+<a id="-the-complete-local-first-stack"></a>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-banner.svg" width="100%" alt="07. Contributing, the stack and credits. Three sibling repos and a Discord"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-r1.svg" width="100%" alt="EARS + MOUTH. This repo, with claude-code-local as brain and browser-agent as hands. MIT licensed. Use it however you want."></picture>
+
+### 🤝 Contributing
 
 PRs and issues super welcome, especially if you want to:
 
@@ -511,9 +530,8 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same suite on Ubuntu with Python 3.9 and 3.13, and on macOS, where it also compiles `Listen.swift` and `MicProbe.swift` with `swiftc`.
 
----
 
-## 🧩 The Complete Local-First Stack
+### 🧩 The Complete Local-First Stack
 
 `NarrateClaude` is the **ears and mouth** — the listener, the injector, the cloned-voice pipeline. It's one of three sibling repos that together form a **local-first ambient computing stack** that never sends a keystroke, a voice clip, or a page load to the cloud. Each piece stands alone; together they're the full setup.
 
@@ -547,16 +565,14 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same suite 
 
 Think of it as hi-fi audio gear: the speakers and the amplifier are separate components, each great on its own, and together they make a system.
 
----
 
-## 🔗 Sibling Projects (Quick Links)
+### 🔗 Sibling Projects (Quick Links)
 
 - 🤖 [**claude-code-local**](https://github.com/nicedreamzapp/claude-code-local) — The local AI brain NarrateClaude was originally built to talk to. Run Claude Code against a local Gemma / Llama / Qwen model with zero cloud calls. Ships the `Narrative Gemma.command` launcher that loads the narration persona on the model side.
 - 🌐 [**browser-agent**](https://github.com/nicedreamzapp/browser-agent) — Drives a real Brave browser via Chrome DevTools Protocol using the same local AI setup. Add it to the stack when you want the model to navigate the web for you.
 
----
 
-## 🧭 Other ways to do this
+### 🧭 Other ways to do this
 
 Voice on the Mac has a lot of good people working on it. If you want to build your own loop, or swap a piece of this one:
 
@@ -564,17 +580,15 @@ Voice on the Mac has a lot of good people working on it. If you want to build yo
 - **[RealtimeSTT](https://github.com/KoljaB/RealtimeSTT)** is a low-latency speech-to-text library with voice activity detection and wake words built in. Good if you want a listener in Python.
 - **[mlx-audio](https://github.com/Blaizzy/mlx-audio)** does text-to-speech, speech-to-text and speech-to-speech on MLX. Plenty of voices to plug into `~/.local/bin/speak`.
 
----
 
-## 🙏 Credits
+### 🙏 Credits
 
 - 🍎 **Apple** — `SFSpeechRecognizer` is a legitimately good on-device speech engine that's been sitting in macOS for years, mostly unused by the indie AI scene. Thanks for shipping it.
 - 🎤 **[Pocket TTS](https://github.com/kyutai-labs/pocket-tts)** by Kyutai — the cloned-voice synthesizer I use on the output side. Any compatible TTS works, but this is what I reach for.
 - 🤖 **Anthropic + Claude Code** — the AI coding tool this voice loop was built to talk to
 
----
 
-## 💬 Community
+### 💬 Community
 
 Builders running, contributing to, or hacking on `NarrateClaude`, `claude-code-local`, and `browser-agent` hang out in a small Discord. Quiet, builder-tone, no bots.
 
@@ -584,10 +598,12 @@ Builders running, contributing to, or hacking on `NarrateClaude`, `claude-code-l
 
 👉 **[discord.gg/ZdSqgAxUW](https://discord.gg/ZdSqgAxUW)**
 
----
 
 <p align="center">
   <strong>📜 MIT License</strong> — Use it however you want. Fork it. Build on it. Ship it in your own product.<br><br>
   ⭐ <strong>If this helped you talk to your Mac instead of typing at it, leave a star.</strong> ⭐<br><br>
   <sub>Built with love on an M5 Max by <a href="https://github.com/nicedreamzapp">@nicedreamzapp</a></sub>
 </p>
+
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-rule.svg" width="100%" alt="">
+
