@@ -15,10 +15,11 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/📜_MIT-Free_Forever-yellow?style=for-the-badge" alt="MIT"></a>
     <a href="https://discord.gg/ZdSqgAxUW"><img src="https://img.shields.io/discord/1497121921580404818?label=NiceDreamzApps&logo=discord&color=5865F2&style=for-the-badge" alt="Join the NiceDreamzApps Discord"></a>
   </p>
+</p>
 
 <a id="what"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s01-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s01-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s01-banner.svg" width="100%" alt="01. What it is and what I built. A hands-free voice loop for Claude Code on macOS"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s01-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s01-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s01-r1.svg" width="100%" alt="Speak. Apple&#x27;s speech engine transcribes on-device. Listen. Replies are spoken back in your own cloned voice. Zero internet. No cloud, works on a plane."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-banner.svg" width="100%" alt="01. What it is and what I built. A hands-free voice loop for Claude Code on macOS"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-r1.svg" width="100%" alt="Speak. Apple&#x27;s speech engine transcribes on-device. Listen. Replies are spoken back in your own cloned voice. Zero internet. No cloud, works on a plane."></picture>
 
 **NarrateClaude is a hands-free voice loop for Claude Code on macOS: it transcribes your speech on-device with Apple's speech engine, types it into the Terminal window running `claude`, and speaks the replies through whatever voice you plug into `~/.local/bin/speak`.**
 
@@ -51,12 +52,12 @@
 >
 > 👉 **[See how all three fit together below](#-the-complete-local-first-stack)**
 
-<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s01-rule.svg" width="100%" alt="">
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s01-rule.svg" width="100%" alt="">
 
 
 <a id="ohm"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s02-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s02-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s02-banner.svg" width="100%" alt="02. Ohm and the short version. The same voice loop, in any browser"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s02-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s02-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s02-r1.svg" width="100%" alt="Ohm. Any browser can do it now. Ohm is a separate project. Private. No cloud, no API bills, no one listening in."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-banner.svg" width="100%" alt="02. Ohm and the short version. The same voice loop, in any browser"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-r1.svg" width="100%" alt="Ohm. Any browser can do it now. Ohm is a separate project. Private. No cloud, no API bills, no one listening in."></picture>
 
 ### 🌐 New — Ohm: the same voice loop, in any browser
 
@@ -95,12 +96,12 @@ Your voice goes into Apple's built-in speech engine (the same one that powers ma
 
 It's Siri, if Siri was actually private, actually smart, and actually sounded like you.
 
-<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s02-rule.svg" width="100%" alt="">
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s02-rule.svg" width="100%" alt="">
 
 
 <a id="why"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s03-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s03-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s03-banner.svg" width="100%" alt="03. Why I built this. Ambient computing starts here, and what 2.0 brings"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s03-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s03-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s03-r1.svg" width="100%" alt="Ambient computing. The computer is around you, not in front of you. Work while playing. The keyboard is optional. Coming in 2.0. Talking Stick mode: interrupt it mid-sentence."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-banner.svg" width="100%" alt="03. Why I built this. Ambient computing starts here, and what 2.0 brings"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-r1.svg" width="100%" alt="Ambient computing. The computer is around you, not in front of you. Work while playing. The keyboard is optional. Coming in 2.0. Talking Stick mode: interrupt it mid-sentence."></picture>
 
 > 💭 **I'm tired of being hunched over a screen with a mouse in my hand.**
 
@@ -175,12 +176,12 @@ Status, per the log: Apple VPIO did not hold up (attempts 1 and 5). The setup th
 
 The v2 code lives in a local `dictation-v2/` Swift Package that is **not published in this repo** (it is in `.gitignore`). Everything you can run from this repo is v1.
 
-<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s03-rule.svg" width="100%" alt="">
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s03-rule.svg" width="100%" alt="">
 
 
 <a id="how"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s04-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s04-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s04-banner.svg" width="100%" alt="04. How it works. What it feels like, and the diagram"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s04-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s04-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s04-r1.svg" width="100%" alt="On-device. Your voice goes nowhere. It stays on your Mac. Your own voice. The reply is your cloned voice. $0. With a local model there are no monthly fees."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-banner.svg" width="100%" alt="04. How it works. What it feels like, and the diagram"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-r1.svg" width="100%" alt="On-device. Your voice goes nowhere. It stays on your Mac. Your own voice. The reply is your cloned voice. $0. With a local model there are no monthly fees."></picture>
 
 ### 🤔 Wait, What?
 
@@ -277,12 +278,12 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s04-rule.svg" width="100%" alt="">
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s04-rule.svg" width="100%" alt="">
 
 
 <a id="setup"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s05-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s05-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s05-banner.svg" width="100%" alt="05. Setup and run. The five-minute version"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s05-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s05-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s05-r1.svg" width="100%" alt="3 commands. Clone, make runnable, set up. One click. Or use the one-click launcher. Mic permission. Grant it once."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-banner.svg" width="100%" alt="05. Setup and run. The five-minute version"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-r1.svg" width="100%" alt="3 commands. Clone, make runnable, set up. One click. Or use the one-click launcher. Mic permission. Grant it once."></picture>
 
 ### 📋 What you need first
 
@@ -410,12 +411,12 @@ PLIST
 
 🎨 Want a custom icon? Drop a `.icns` file at `$APP/Contents/Resources/AppIcon.icns` and add `<key>CFBundleIconFile</key><string>AppIcon</string>` to the plist.
 
-<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s05-rule.svg" width="100%" alt="">
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s05-rule.svg" width="100%" alt="">
 
 
 <a id="hood"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s06-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s06-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s06-banner.svg" width="100%" alt="06. Under the hood and troubleshooting. Why it behaves the way it does"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s06-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s06-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s06-r1.svg" width="100%" alt="2.5 s of unchanged text ends a sentence. 5 min preventive listener respawn. 20 s of silence marks it wedged."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-banner.svg" width="100%" alt="06. Under the hood and troubleshooting. Why it behaves the way it does"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-r1.svg" width="100%" alt="2.5 s of unchanged text ends a sentence. 5 min preventive listener respawn. 20 s of silence marks it wedged."></picture>
 
 ### 🎭 The "Always Narrating" Brain
 
@@ -500,12 +501,12 @@ swiftc -O MicProbe.swift -o /tmp/micprobe
 
 If the numbers stay at zero, macOS isn't letting the process access the mic — fix the permission first.
 
-<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s06-rule.svg" width="100%" alt="">
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s06-rule.svg" width="100%" alt="">
 
 
 <a id="-the-complete-local-first-stack"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s07-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s07-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s07-banner.svg" width="100%" alt="07. Contributing, the stack and credits. Three sibling repos and a Discord"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s07-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s07-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s07-r1.svg" width="100%" alt="EARS + MOUTH. This repo, with claude-code-local as brain and browser-agent as hands. MIT licensed. Use it however you want."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-banner.svg" width="100%" alt="07. Contributing, the stack and credits. Three sibling repos and a Discord"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-r1.svg" width="100%" alt="EARS + MOUTH. This repo, with claude-code-local as brain and browser-agent as hands. MIT licensed. Use it however you want."></picture>
 
 ### 🤝 Contributing
 
@@ -605,5 +606,5 @@ Builders running, contributing to, or hacking on `NarrateClaude`, `claude-code-l
   <sub>Built with love on an M5 Max by <a href="https://github.com/nicedreamzapp">@nicedreamzapp</a></sub>
 </p>
 
-<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/587a28b68dea36276ae5dda9597b854c052525f5/assets/readme/s07-rule.svg" width="100%" alt="">
+<img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/assets/readme/s07-rule.svg" width="100%" alt="">
 
