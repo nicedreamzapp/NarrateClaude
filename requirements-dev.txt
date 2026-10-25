@@ -1,6 +1,9 @@
 # Test dependencies only. The suite needs no GPU, model weights, network,
 # or macOS APIs: resemblyzer and the MLX judge are faked in tests/.
-pytest==9.1.1
+# Patched pytest (9.0.3+) needs Python 3.10+; older Pythons still in the CI matrix get the last
+# release that installs there (test-only, never shipped).
+pytest==9.1.1; python_version >= "3.10"
+pytest==8.4.2; python_version >= "3.9" and python_version < "3.10"
 # numpy 2.2 dropped Python 3.9, which is still /usr/bin/python3 on macOS.
 numpy==2.0.2; python_version < "3.10"
 numpy==2.2.6; python_version >= "3.10"

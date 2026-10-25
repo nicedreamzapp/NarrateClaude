@@ -14,7 +14,8 @@ concurrency:
 jobs:
   tests:
     name: tests (ubuntu, python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    # ubuntu-latest (26.04) has no Python 3.9 build; 24.04 still does.
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     strategy:
       fail-fast: false
