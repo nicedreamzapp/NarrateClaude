@@ -4,7 +4,7 @@
 # 1. Stops any previously-running dictation listener.
 # 2. Tells Apple Terminal to open a new window running `claude`, and
 #    captures the window ID of that new window.
-# 3. Writes the window ID into ~/NarrateClaude/dictation/state/target.json.
+# 3. Writes the window ID into <repo>/dictation/state/target.json.
 # 4. Waits for claude to boot (banner, narrate-mode prep, prompt drawn).
 # 5. Starts the hands-free dictation listener pointed at that window.
 #
@@ -13,7 +13,7 @@
 #
 # ── Running this ─────────────────────────────────────────────────────
 # You can run this script directly:
-#     bash ~/NarrateClaude/narrative-claude.sh
+#     bash ~/NarrateClaude/narrative-claude.sh     (or: narrate-claude)
 #
 # …or wrap it in a macOS .app bundle so you can double-click it from
 # Finder / the Dock / a Desktop shortcut. Minimal .app structure:
@@ -27,8 +27,27 @@
 #           AppIcon.icns           <- your icon (optional)
 #
 # See README.md for a short "build your own .app wrapper" recipe.
+#
+# The repo is found from this script's own location (symlinks are followed,
+# so an .app or ~/.local/bin link works). If the script was copied somewhere
+# else, it falls back to $NARRATE_DIR, then ~/NarrateClaude.
 
-DICT_DIR="$HOME/NarrateClaude/dictation"
+# Follow symlinks by hand: older macOS has no `readlink -f`.
+find_repo() {
+    local src="${BASH_SOURCE[0]}" dir
+    while [ -L "$src" ]; do
+        dir="$(cd -P "$(dirname "$src")" && pwd)"
+        src="$(readlink "$src")"
+        case "$src" in /*) ;; *) src="$dir/$src" ;; esac
+    done
+    cd -P "$(dirname "$src")" && pwd
+}
+
+REPO_DIR="$(find_repo 2>/dev/null || true)"
+if [ -z "$REPO_DIR" ] || [ ! -f "$REPO_DIR/dictation/bin/dictation" ]; then
+    REPO_DIR="${NARRATE_DIR:-$HOME/NarrateClaude}"
+fi
+DICT_DIR="$REPO_DIR/dictation"
 DICT="$DICT_DIR/bin/dictation"
 STATE_DIR="$DICT_DIR/state"
 
@@ -41,10 +60,14 @@ fi
 #    new tab; we read its tty path and then walk Terminal's windows looking
 #    for the tab with a matching tty. tty comparison is robust whereas
 #    `tabs of w contains newTab` is finicky for object references.
-WIN_ID=$(/usr/bin/osascript <<'OSA'
+#    The repo path is passed as an argument and quoted by AppleScript, so a
+#    path with spaces or quotes is safe.
+WIN_ID=$(/usr/bin/osascript - "$REPO_DIR" <<'OSA'
+on run argv
+set repoDir to item 1 of argv
 tell application "Terminal"
     activate
-    set newTab to do script "cd ~/NarrateClaude && export CLAUDE_SESSION_LABEL='NarrativeClaude' && claude"
+    set newTab to do script "cd " & quoted form of repoDir & " && export CLAUDE_SESSION_LABEL='NarrativeClaude' && claude"
     set newTty to ""
     try
         set newTty to tty of newTab
@@ -72,6 +95,7 @@ tell application "Terminal"
     end if
     return foundId
 end tell
+end run
 OSA
 )
 

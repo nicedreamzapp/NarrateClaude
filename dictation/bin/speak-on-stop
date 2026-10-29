@@ -4,7 +4,7 @@
 Fires every time Claude finishes responding. Pulls the last assistant
 message from the transcript JSONL, scrubs out code/markdown noise that
 sounds bad spoken, and pipes the result through Kokoro-82M Heart (af_heart)
-via ~/.local/bin/speak. So Matt never has to look at the
+via ~/.local/bin/speak (or $NARRATE_SPEAK). So you never have to look at the
 terminal to know what Claude said.
 
 Stays out of its own way:
@@ -21,13 +21,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-SPEAK = "/Users/dtribe/.local/bin/speak"
+SPEAK = os.environ.get("NARRATE_SPEAK") or str(Path.home() / ".local" / "bin" / "speak")
 MAX_LEN = 1200
 
 # Master switch: the hook stays registered permanently, but only speaks
 # while this flag file exists. "narration on" touches it, "narration off"
 # removes it — instant toggle, no settings.json edits, no session reload.
-FLAG = "/Users/dtribe/.claude/narration.on"
+FLAG = os.environ.get("NARRATE_FLAG") or str(Path.home() / ".claude" / "narration.on")
 
 
 def _extract_assistant_text(transcript_path: str) -> str:

@@ -275,3 +275,41 @@ def test_dispatch_pipeline_end_to_end(dispatch_tree, tmp_path):
     assert "shutdown requested by watchdog, exiting cleanly" in log
     assert not (root / "state" / ".shutdown").exists()
     assert elapsed < 30
+
+
+# --- narrative-claude.sh: finds its repo through symlinks --------------------
+#
+# Only the find_repo function is run (extracted from the script); the rest of
+# the launcher opens Terminal windows and is never executed here.
+
+
+def _find_repo_snippet():
+    src = (REPO / "narrative-claude.sh").read_text()
+    start = src.index("find_repo() {")
+    end = src.index("\n}\n", start) + 3
+    return src[start:end]
+
+
+def test_launcher_has_no_hardcoded_repo_path():
+    src = (REPO / "narrative-claude.sh").read_text()
+    assert 'cd ~/NarrateClaude' not in src
+    assert 'DICT_DIR="$HOME/NarrateClaude' not in src
+    assert '"${NARRATE_DIR:-$HOME/NarrateClaude}"' in src
+    assert "quoted form of repoDir" in src
+
+
+def test_launcher_find_repo_follows_relative_symlink_chain(tmp_path):
+    repo = tmp_path / "my repo"
+    repo.mkdir()
+    script = repo / "narrative-claude.sh"
+    script.write_text("#!/bin/bash\n" + _find_repo_snippet() + 'find_repo\n')
+    app = tmp_path / "App.app" / "Contents" / "MacOS"
+    app.mkdir(parents=True)
+    (app / "NarrativeClaude").symlink_to(os.path.relpath(script, app))
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "narrate-claude").symlink_to(app / "NarrativeClaude")
+    for entry in (script, app / "NarrativeClaude", bindir / "narrate-claude"):
+        r = run(["bash", str(entry)])
+        assert r.returncode == 0, r.stderr
+        assert os.path.realpath(r.stdout.strip()) == os.path.realpath(repo)
