@@ -1,15 +1,37 @@
 ---
 title: How it works, architecture of the voice loop
-description: How NarrateClaude turns speech into Claude Code input. The Swift SFSpeechRecognizer listener, stability-based endpointing, wedge watchdogs, the dispatch respawn loop, filters, and AppleScript injection into Terminal.
+description: How NarrateClaude turns speech into Claude Code input. The whisper.cpp listener and its VAD, the pty session, the Piper voice, the Terminal.app dispatch loop with its filters and AppleScript injection, and the optional Swift SFSpeechRecognizer listener.
 ---
 
 # How it works
 
-NarrateClaude is a Unix pipeline supervised by a bash loop. One process listens, two filters decide what to keep, and one script types each surviving line into Terminal.
+## The open-source loop (default)
 
 ```mermaid
 flowchart LR
-    mic([Microphone]) --> listen[listen<br/>Swift, SFSpeechRecognizer]
+    mic([Microphone]) --> vad[stt.py<br/>energy VAD]
+    vad -->|one WAV per sentence| ws[whisper-server<br/>whisper.cpp + Silero VAD]
+    ws -->|text| rel[relevance.py]
+    rel --> gate[noise gate]
+    gate --> pty[session.py<br/>pty / ConPTY]
+    pty --> claude[claude]
+    claude -->|CLAUDE.md: narrate| speak[~/.local/bin/speak<br/>Piper by default]
+    speak -. playing: mic paused .-> vad
+```
+
+- **Listening** (`dictation/voice/stt.py`). 30 ms mic frames at 16 kHz. A sentence starts when the level stays three times above the noise floor for 90 ms, and ends after `LISTEN_SILENCE_SEC` (1.0 s) below it. The floor is the quietest frame of the last 5 s, so steady noise stops counting as speech. 0.5 s of audio before the start is kept so first words aren't clipped.
+- **Transcribing.** The listener starts `whisper-server` once with the f16 model and Silero VAD, on a free 127.0.0.1 port, and posts each sentence to `/inference`. Whisper's usual filler on silence ("Thank you.", "[BLANK_AUDIO]") is dropped.
+- **Typing** (`dictation/voice/session.py`). `claude` runs in a pseudo-terminal the session owns, and your keyboard and screen pass straight through, so it works in any terminal. Each sentence goes through `relevance.py` and the same noise gate as `inject`, then is written into the pty: Escape (barge-in), the text, and Enter in a separate write so the TUI doesn't take it for a paste. `session.py --send "text"` types into a running session through a token-protected 127.0.0.1 socket.
+- **Speaking** (`dictation/voice/speak.py`). Piper renders to WAV and a player plays it; the pid is in `state/speaking.pid` while it plays, so the listener stays deaf to it and a new sentence can cut it off.
+- **macOS Terminal.app mode** is the pipeline below with `bin/listen-whisper` in place of the Swift `listen` (or `listen` itself with `NARRATE_STT=apple`).
+
+## Terminal.app mode
+
+NarrateClaude's Terminal.app mode is a Unix pipeline supervised by a bash loop. One process listens, two filters decide what to keep, and one script types each surviving line into Terminal.
+
+```mermaid
+flowchart LR
+    mic([Microphone]) --> listen[listen-whisper, or listen<br/>Swift, SFSpeechRecognizer]
     listen -->|one line per sentence| filter[filter.py<br/>voiceprint, or cat]
     filter --> rel[relevance.py<br/>was that for me?]
     rel --> loop{{dispatch<br/>read loop}}

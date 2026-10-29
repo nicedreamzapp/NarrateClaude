@@ -1,48 +1,60 @@
 ---
-title: Install NarrateClaude on macOS
-description: Requirements and step-by-step install for NarrateClaude, the hands-free voice loop for Claude Code. Covers Xcode command-line tools, compiling the Swift listener, permissions and the speak command.
+title: Install NarrateClaude on macOS, Linux and Windows
+description: Requirements and install for NarrateClaude, the hands-free voice loop for Claude Code. Covers the one-line installers, whisper.cpp, the f16 models, the Piper voice, permissions and the manual Apple-speech setup.
 ---
 
 # Install
 
 ## Requirements
 
-These come from what the scripts actually call.
-
 | Need | Why |
 |---|---|
-| A Mac with Apple Silicon | The dispatcher runs the optional voiceprint filter with `/usr/bin/arch -arm64`. The README targets M1 and later. |
-| Xcode command-line tools (`xcode-select --install`) | `dictation setup` compiles the listener with `/usr/bin/swiftc`. The scripts also call `/usr/bin/python3`. |
-| Apple's Terminal.app | Window binding and typing use Terminal's AppleScript dictionary. Other terminals do not work yet. |
-| [Claude Code](https://github.com/anthropics/claude-code), so `claude` runs in Terminal | `dictation setup` looks for a Terminal tab whose processes include `claude`. |
+| macOS, Linux, or Windows 10/11 | Terminal.app mode is macOS only; the pty session (`narrate-claude --here`) runs everywhere. |
+| A C++ compiler on macOS/Linux (`xcode-select --install`, `build-essential`) | `install.sh` builds whisper.cpp from source. cmake is installed into the venv if it's missing. Windows uses the official binaries. |
+| Python 3.9+ (3.10+ on Windows) | The listener, session and Piper voice run in a venv the installer creates. |
+| PortAudio on Linux (`libportaudio2`) | The mic library (python-sounddevice). The macOS and Windows wheels bundle it. |
+| [Claude Code](https://github.com/anthropics/claude-code), so `claude` is on your PATH | The session runs `claude` itself. |
 | A microphone | Built-in is fine. |
-| English speech | The recognizer is created with `Locale(identifier: "en-US")`. |
-| A program at `~/.local/bin/speak` that plays audio with `afplay` | The listener pauses only while a process named `afplay` exists. |
 
 Optional:
 
-- [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), so `claude` talks to a model on your Mac instead of Anthropic's servers.
+- [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), so `claude` talks to a model on your machine instead of Anthropic's servers.
 - A Python at `~/.local/mlx-server/bin/python` with `mlx_lm` installed, for the relevance judge. See [Configuration](configuration.md#relevance-filter).
 
 ## One-line install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.sh | bash        # macOS, Linux
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.sh | bash -s -- --skip-model
 ```
 
-It clones to `~/NarrateClaude` (`NARRATE_DIR`; `NARRATE_REPO` picks the source), runs `chmod +x`, creates the starter `~/.local/bin/speak` from step 2 only if you have no `speak` (marked so uninstall can tell it apart), links `narrative-claude.sh` as `narrate-claude` in `~/.local/bin` (`KIT_BIN_DIR`), and compiles the listener with the same `swiftc -O` command `dictation setup` uses (`NARRATE_SKIP_BUILD=1` skips it). Window binding is left to the launcher, so no `claude` window is needed. It prints the Stop-hook snippet but never edits `~/.claude/settings.json`. Then grant the permissions in step 4.
+```powershell
+irm https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.ps1 | iex              # Windows
+```
+
+It clones to `~/NarrateClaude` (`NARRATE_DIR`; `NARRATE_REPO` picks the source) and puts the voice loop in `~/.local/share/narrateclaude` (`%LOCALAPPDATA%\narrateclaude` on Windows; `NARRATE_DATA`):
+
+- whisper.cpp v1.9.5: built from the pinned tag with cmake (Metal on Apple Silicon, CUDA when `nvcc` is on PATH, extra flags in `NARRATE_CMAKE_FLAGS`), or the official Windows zip checked by sha256
+- a venv with [`dictation/voice/requirements.txt`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/dictation/voice/requirements.txt): python-sounddevice, Piper, and pywinpty on Windows
+- from [`dictation/voice/models.txt`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/dictation/voice/models.txt), each pinned to a commit and checked by sha256: the f16 whisper model for your memory (`large-v3-turbo` at 8 GB or more, `small.en` at 4 to 8 GB, `base.en` below; `NARRATE_WHISPER_MODEL` overrides), Silero VAD v6.2.0 and the Piper voice `en_US-lessac-high`. `--skip-model` (`NARRATE_SKIP_MODEL=1`) downloads none of them.
+
+Then it creates `~/.local/bin/speak` with the Piper voice only if you have no `speak` (marked so uninstall can tell it apart; an older `say` wrapper from this installer is upgraded), links `narrative-claude.sh` as `narrate-claude` in `~/.local/bin` (`KIT_BIN_DIR`; `narrate-claude.cmd` on Windows), and on macOS compiles the optional Apple-speech listener (`NARRATE_SKIP_BUILD=1` builds nothing). It prints the Stop-hook snippet but never edits `~/.claude/settings.json`. Running it again rebuilds and downloads nothing that is already there.
 
 Uninstall:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash
-# also delete the clone, including dictation/state:
+# also delete the models and the clone, including dictation/state:
 curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash -s -- --purge
 ```
 
-It runs `dictation stop` and removes the `narrate-claude` link, the installer's `speak` and the compiled listener.
+```powershell
+irm https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.ps1 | iex   # $env:NARRATE_PURGE = "1" first to purge
+```
 
-The steps below are the manual install. The repo can live anywhere: `narrative-claude.sh` finds its own folder, following symlinks, and falls back to `$NARRATE_DIR`, then `~/NarrateClaude`, when it was copied out of the repo.
+It runs `dictation stop`, removes the `narrate-claude` link, the installer's `speak`, the compiled listener, whisper.cpp and the venv. Models stay unless you purge.
+
+The steps below are the manual install of the original macOS Terminal.app setup with Apple's speech engine (`narrate-claude --apple`). The repo can live anywhere: `narrative-claude.sh` finds its own folder, following symlinks, and falls back to `$NARRATE_DIR`, then `~/NarrateClaude`, when it was copied out of the repo.
 
 ## 1. Clone
 

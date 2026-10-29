@@ -11,6 +11,9 @@ Run with the venv python after install.sh / install.ps1:
 3. A session runs a stub in place of `claude` inside the loop's own pty,
    with the listener fed from the WAV files; the stub must receive each
    sentence as a submitted line. Plus one line typed in with --send.
+4. The session itself runs inside a real terminal (a pty on macOS/Linux,
+   a ConPTY console on Windows) and keys typed into that terminal must
+   reach the stub, so the keyboard passthrough is tested too.
 
 CI runs this on macOS, Linux and Windows. It never touches a real claude.
 """
@@ -115,7 +118,73 @@ def main():
     session.wait(timeout=60)
     assert got.read_text(encoding="utf-8").splitlines()[-1] == "please quit the session now"
     assert not state.exists(), "session.json should be removed on exit"
+    keyboard_through_a_real_terminal(tmp)
     print("e2e voice loop: OK")
+
+
+def keyboard_through_a_real_terminal(tmp):
+    got = tmp / "keys.txt"
+    stub = tmp / "keystub.py"
+    stub.write_text(textwrap.dedent(f"""
+        import sys
+        print("key stub ready", flush=True)
+        for line in sys.stdin:
+            line = line.strip()
+            if line:
+                with open({str(got)!r}, "a", encoding="utf-8") as f:
+                    f.write(line + "\\n")
+            if line == "bye":
+                break
+    """))
+    cmd = [PY, str(VOICE / "session.py"), "--no-listen", "--", PY, str(stub)]
+    env = dict(os.environ, NARRATE_BARGE_IN="0", NARRATE_RELEVANCE="0")
+    if os.name == "nt":
+        from winpty import PtyProcess
+        term = PtyProcess.spawn(cmd, env=env, dimensions=(30, 100))
+        write = term.write
+        read = lambda: term.read(4096)
+        alive = term.isalive
+    else:
+        import pty
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.execve(cmd[0], cmd, env)
+        write = lambda s: os.write(fd, s.encode())
+        read = lambda: os.read(fd, 4096)
+
+        def alive():
+            return os.waitpid(pid, os.WNOHANG) == (0, 0)
+    import threading
+    screen = []
+
+    def drain():
+        while True:
+            try:
+                data = read()
+            except Exception:
+                return
+            if not data:
+                return
+            screen.append(data if isinstance(data, str) else data.decode("utf-8", "replace"))
+    threading.Thread(target=drain, daemon=True).start()
+
+    def wait_for(pred, secs=30):
+        end = time.monotonic() + secs
+        while time.monotonic() < end:
+            if pred():
+                return True
+            time.sleep(0.2)
+        return False
+    assert wait_for(lambda: "key stub ready" in "".join(screen)), "".join(screen)[-500:]
+    for ch in "typed on the keyboard":
+        write(ch)
+        time.sleep(0.01)
+    write("\r")
+    assert wait_for(lambda: got.exists() and "typed on the keyboard" in got.read_text(encoding="utf-8")), \
+        "".join(screen)[-500:]
+    write("bye\r")
+    assert wait_for(lambda: not alive()), "session did not exit"
+    print(f"  keyboard passthrough: {got.read_text(encoding='utf-8').splitlines()}", flush=True)
 
 
 if __name__ == "__main__":

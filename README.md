@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/🔊_Listen-In_Your_Voice-blueviolet?style=for-the-badge" alt="Listen">
     <img src="https://img.shields.io/badge/🪴_Ambient-Computing-ff69b4?style=for-the-badge" alt="Ambient">
     <img src="https://img.shields.io/badge/🔒_Privacy-100%25_Local-success?style=for-the-badge" alt="Local">
-    <img src="https://img.shields.io/badge/🍎_macOS-Apple_Silicon-lightgrey?style=for-the-badge" alt="macOS">
+    <img src="https://img.shields.io/badge/💻_macOS_·_Linux_·_Windows-whisper.cpp-lightgrey?style=for-the-badge" alt="macOS, Linux, Windows">
     <img src="https://img.shields.io/badge/✈️_Works-On_A_Plane-9cf?style=for-the-badge" alt="Offline">
     <a href="LICENSE"><img src="https://img.shields.io/badge/📜_MIT-Free_Forever-yellow?style=for-the-badge" alt="MIT"></a>
     <a href="https://discord.gg/ZdSqgAxUW"><img src="https://img.shields.io/discord/1497121921580404818?label=NiceDreamzApps&logo=discord&color=5865F2&style=for-the-badge" alt="Join the NiceDreamzApps Discord"></a>
@@ -22,24 +22,27 @@
 <picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s01-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s01-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s01-banner.svg" width="100%" alt="01. What it is and what I built. A hands-free voice loop for Claude Code on macOS"></picture>
 <picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s01-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s01-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s01-r1.svg" width="100%" alt="Speak. Apple&#x27;s speech engine transcribes on-device. Listen. Replies are spoken back in your own cloned voice. Zero internet. No cloud, works on a plane."></picture>
 
-**NarrateClaude is a hands-free voice loop for Claude Code on macOS: it transcribes your speech on-device with Apple's speech engine, types it into the Terminal window running `claude`, and speaks the replies through whatever voice you plug into `~/.local/bin/speak`.**
+**NarrateClaude is a hands-free voice loop for Claude Code on macOS, Linux and Windows: it transcribes your speech on your own machine with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), types it into the `claude` session, and speaks the replies with the local [Piper](https://github.com/OHF-Voice/piper1-gpl) voice, or whatever voice you plug into `~/.local/bin/speak`. Everything is open source and runs offline.**
 
 **Proof:** there is no demo video or screenshot in the repo yet. What is here is the working v1 code (listed below) and an engineering log, [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), that records seven echo-cancellation attempts with what failed, why, and the measured results (for example 58 dB offline echo reduction for WebRTC AEC3 vs 29.5 dB for Speex).
 
 | Part | File |
 |---|---|
-| 🎧 Continuous listener. Ends a sentence when the text stops changing for 2.5 s, pauses while `afplay` is playing, exits for a respawn when the recognizer wedges | [`dictation/src/Listen.swift`](dictation/src/Listen.swift) |
+| 🎧 Listener: mic → voice activity detection → a whisper.cpp server it keeps loaded (f16 model, Silero VAD inside). Pauses while the computer is talking | [`dictation/voice/stt.py`](dictation/voice/stt.py) |
+| 🖥️ Session: runs `claude` in a pty the loop owns (ConPTY on Windows) and types each sentence into it. Works in any terminal | [`dictation/voice/session.py`](dictation/voice/session.py) |
+| 🔊 Default voice: Piper TTS, used when you have no `speak` of your own | [`dictation/voice/speak.py`](dictation/voice/speak.py) |
+| 🍎 Optional Apple-speech listener for `--apple` (the original v1 listener) | [`dictation/src/Listen.swift`](dictation/src/Listen.swift) |
 | 🔁 Supervisor: respawn loop, 3-second window watchdog, pipes listener → filters → injector | [`dictation/bin/dispatch`](dictation/bin/dispatch) |
-| ⌨️ Injector: types each sentence into the bound Terminal window via AppleScript, cuts off any speech that is playing, drops noise and fragments | [`dictation/bin/inject`](dictation/bin/inject) |
+| ⌨️ Terminal.app mode (macOS): types each sentence into the bound Terminal window via AppleScript, cuts off any speech that is playing, drops noise and fragments | [`dictation/bin/inject`](dictation/bin/inject) |
 | 🎛️ Control CLI (`setup`, `start`, `stop`, `status`, `toggle`, `tail`, `uninstall`) with a launcher gate | [`dictation/bin/dictation`](dictation/bin/dictation) |
 | 🖱️ One-click launcher: opens Terminal, starts `claude`, binds the mic to that window | [`narrative-claude.sh`](narrative-claude.sh) |
 | 🙉 "Was that for me?" filter: `claude tune out` / `tune in` mute, pet-talk regexes, and a local LLM judge that fails open | [`dictation/filter/relevance.py`](dictation/filter/relevance.py) |
-| 👤 Voiceprint filter and enrollment script (not active with the v1 listener yet, see Known limits) | [`dictation/filter/filter.py`](dictation/filter/filter.py), [`enroll.py`](dictation/filter/enroll.py) |
+| 👤 Voiceprint filter and enrollment script (Terminal.app mode, see Known limits) | [`dictation/filter/filter.py`](dictation/filter/filter.py), [`enroll.py`](dictation/filter/enroll.py) |
 | 🔊 Claude Code Stop hook that reads the last reply aloud | [`dictation/bin/speak-on-stop`](dictation/bin/speak-on-stop) |
 | 🎭 The always-narrate persona | [`CLAUDE.md`](CLAUDE.md) |
 | 📐 Research and experiment logs for the 2.0 barge-in work | [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), [`EXPERIMENT_PLAN.md`](EXPERIMENT_PLAN.md), [`RESEARCH_2026_05_21.md`](RESEARCH_2026_05_21.md) |
 
-**Upstream, not mine:** Apple's Speech framework (`SFSpeechRecognizer`), [Claude Code](https://github.com/anthropics/claude-code) by Anthropic, [Resemblyzer](https://github.com/resemble-ai/Resemblyzer) for voiceprints, [MLX](https://github.com/ml-explore/mlx) running Meta's Llama-3.2-3B as the relevance judge, and [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) by Kyutai for my cloned voice. Full list in [`CREDITS.md`](CREDITS.md).
+**Upstream, not mine:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and OpenAI's Whisper weights, [Silero VAD](https://github.com/snakers4/silero-vad), [Piper](https://github.com/OHF-Voice/piper1-gpl) and its lessac voice, [PortAudio](https://www.portaudio.com/) via [python-sounddevice](https://github.com/spatialaudio/python-sounddevice), [pywinpty](https://github.com/andfoy/pywinpty), Apple's Speech framework (`SFSpeechRecognizer`, only for `--apple`), [Claude Code](https://github.com/anthropics/claude-code) by Anthropic, [Resemblyzer](https://github.com/resemble-ai/Resemblyzer) for voiceprints, [MLX](https://github.com/ml-explore/mlx) running Meta's Llama-3.2-3B as the relevance judge, and [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) by Kyutai for my cloned voice. Full list in [`CREDITS.md`](CREDITS.md).
 
 > ## 🧩 You're looking at the **EARS + MOUTH** of a three-repo local-first ambient-computing stack
 >
@@ -253,13 +256,13 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 │    🎙️  Your voice                                               │
 │         │                                                       │
 │         ▼                                                       │
-│    🎧 listen  (listens continuously, on-device)                 │
-│       • Apple's built-in speech engine                          │
-│       • Waits for ~2.5 seconds of "done talking" before typing  │
-│       • Pauses itself when your Mac is speaking (no feedback!)  │
+│    🎧 listen  (listens continuously, on this machine)           │
+│       • whisper.cpp, Metal GPU on Apple Silicon                 │
+│       • ~1 second of silence = you're done talking              │
+│       • Pauses itself while the computer talks (no feedback!)   │
 │         │                                                       │
 │         ▼                                                       │
-│    ⌨️  Auto-types your words into a Terminal window             │
+│    ⌨️  Types your words into the claude session                 │
 │         │                                                       │
 │         ▼                                                       │
 │    🤖 Claude Code (running locally, no cloud!)                  │
@@ -288,65 +291,65 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 
 ### 📋 What you need first
 
-- 🍎 **A Mac with Apple Silicon** (M1, M2, M3, M4, M5 — any of them)
-- 🛠️ **Xcode command-line tools** — install with `xcode-select --install` if you haven't already (free, ~1 minute)
+- 💻 **macOS** (Apple Silicon or Intel), **Linux**, or **Windows 10/11**
+- 🛠️ **A C++ compiler** on macOS and Linux, to build whisper.cpp: `xcode-select --install` on a Mac, `build-essential` on Linux (cmake comes along automatically if you don't have it). Windows uses whisper.cpp's official build, no compiler needed.
+- 🐍 **Python 3.9+** (3.10+ on Windows), and on Linux the PortAudio library for the mic (`sudo apt install libportaudio2`)
 - 🎤 **A microphone** (built-in is fine)
-- 🗣️ **English speech.** The listener is hard-coded to the `en-US` recognizer (`dictation/src/Listen.swift`). It asks for on-device recognition when macOS reports that the recognizer supports it, so install the on-device dictation language data if macOS offers it.
-- 🔊 **A TTS voice** — your cloned voice if you have one, or macOS's built-in `say` command as a free starter
-- 🤖 **[Claude Code](https://github.com/anthropics/claude-code)** installed, so `claude` runs in Terminal
-- 🤖 **[claude-code-local](https://github.com/nicedreamzapp/claude-code-local)** — the local AI coding side of the setup. Optional but highly recommended. Without it, `claude` talks to Anthropic's servers, so the "zero internet" part only holds with a local model.
+- 🤖 **[Claude Code](https://github.com/anthropics/claude-code)** installed, so `claude` runs in your terminal
+- 🤖 **[claude-code-local](https://github.com/nicedreamzapp/claude-code-local)**, the local AI coding side of the setup. Optional but highly recommended. Without it, `claude` talks to Anthropic's servers, so the "zero internet" part only holds with a local model.
 
 ### 🚀 Install in one line
+
+macOS and Linux:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.sh | bash
 ```
 
-This clones to `~/NarrateClaude` (set `NARRATE_DIR` to change it), compiles the listener, links the one-click launcher as `narrate-claude` in `~/.local/bin` (`KIT_BIN_DIR`), creates the free starter `~/.local/bin/speak` below if you have no `speak` yet, and prints the optional Stop-hook snippet. It does not edit `~/.claude/settings.json`. `NARRATE_SKIP_BUILD=1` skips the compile.
+Windows (PowerShell):
 
-Uninstall (add `-s -- --purge` to also delete the clone and its state):
+```powershell
+irm https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.ps1 | iex
+```
+
+It clones to `~/NarrateClaude` (`NARRATE_DIR`), then sets up the voice loop in `~/.local/share/narrateclaude` (`%LOCALAPPDATA%\narrateclaude` on Windows, `NARRATE_DATA`):
+
+- **whisper.cpp v1.9.5**, built from source with Metal on Apple Silicon (CUDA on Linux when `nvcc` is there), or the official Windows build
+- **the speech model**, full precision f16, picked for your memory: `large-v3-turbo` with 8 GB or more, `small.en` with 4 to 8 GB, `base.en` below that (`NARRATE_WHISPER_MODEL` overrides)
+- **Silero VAD** and the **Piper** voice `en_US-lessac-high`
+- a Python venv with Piper and the mic library
+
+Every download is pinned to a fixed version and checked by sha256. `--skip-model` (Windows: `$env:NARRATE_SKIP_MODEL = "1"`) installs without downloading models. It links `narrate-claude` into `~/.local/bin` (`KIT_BIN_DIR`), creates `~/.local/bin/speak` with the Piper voice only if you have no `speak` yet, and prints the optional Stop-hook snippet. It never edits `~/.claude/settings.json`.
+
+Uninstall (keeps the downloaded models; `--purge` deletes them and the clone):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash -s -- --purge
 ```
 
-Manual install: [docs/install.md](docs/install.md).
-
-That's it. ✅
-
-### 🔊 Set up your voice (pick one)
-
-**Option A — Free starter (5 seconds)**
-
-```bash
-mkdir -p ~/.local/bin
-cat > ~/.local/bin/speak <<'EOF'
-#!/bin/bash
-# Render to a file and play it with afplay: the listener only mutes the
-# mic while afplay is running, so plain `say` would hear itself.
-f="${TMPDIR:-/tmp}/speak.$$.aiff"
-say -o "$f" "$@" && afplay "$f"
-rm -f "$f"
-EOF
-chmod +x ~/.local/bin/speak
+```powershell
+irm https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.ps1 | iex
 ```
 
-Done. Your Mac will now speak replies using macOS's built-in voice. Not your voice yet, but it works.
+(on Windows, set `$env:NARRATE_PURGE = "1"` first to purge). Manual install: [docs/install.md](docs/install.md).
 
-**Option B — Your own cloned voice (the real fun)**
+### 🔊 Your voice
 
-Point `~/.local/bin/speak` at whatever TTS tool you want: Pocket TTS, Piper, local ElevenLabs, your own voice clone from any service that runs offline. Any script that takes a string and plays audio works, as long as it plays through `afplay` (that is what the listener watches to mute the mic).
+**Out of the box:** the installer's `~/.local/bin/speak` uses Piper, a local open-source voice. Nothing to set up.
+
+**Your own cloned voice:** replace `~/.local/bin/speak` with any script that takes text as its arguments and plays it (Pocket TTS, your own clone, anything offline). Yours always wins; the installer never overwrites it. The listener mutes itself while a player like `afplay`, `aplay`, `paplay`, `pw-play` or `ffplay` is running, so play through one of those (`NARRATE_MUTE_PROCS` changes the list).
 
 ### 🎤 Grant microphone permission
 
-The first time you run the listener, macOS will ask for Microphone **and** Speech Recognition permission. **Approve both.** You'll only be asked once.
+The first time you run it, your OS asks for Microphone access for your terminal app. **Approve it.** (`--apple` on a Mac also asks for Speech Recognition.)
 
 ### ⚠️ Known limits (v1, what's in this repo)
 
-- **Apple Terminal only.** The injector uses Terminal.app AppleScript. iTerm2, Warp and Ghostty don't work yet.
+- **Two ways to run on macOS.** The default opens Apple Terminal (AppleScript typing, as in v1). `narrate-claude --here` works in any terminal app, and is how it runs on Linux and Windows.
 - **No barge-in.** The mic is muted while `afplay` plays, so anything you say during a reply is dropped. The 2.0 work that fixes this is not published here.
 - **Very short commands get dropped.** Anything under 3 words is ignored unless it ends in `?` (so "yes" or "do it" won't go through).
-- **The voiceprint filter doesn't filter yet.** It needs an audio file per sentence and the v1 listener only emits text, so every line passes through.
+- **The voiceprint filter is Terminal-mode only.** Once you enroll a voiceprint, the whisper listener hands it each sentence's audio in Terminal.app mode; `--here` sessions don't run it yet.
 - **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190, but only if `~/.local/mlx-server/bin/python` exists (a Python with `mlx_lm` installed). If that isn't there or the model isn't downloaded, every line passes.
 
 
@@ -355,10 +358,12 @@ The first time you run the listener, macOS will ask for Microphone **and** Speec
 ### 🖱️ The one-click way
 
 ```bash
-bash ~/NarrateClaude/narrative-claude.sh
+narrate-claude            # macOS: a fresh Apple Terminal window running claude, mic bound to it
+narrate-claude --here     # any terminal, macOS or Linux: claude runs right here inside the loop
+narrate-claude --apple    # macOS: Apple's speech engine instead of whisper.cpp
 ```
 
-This opens a fresh Terminal window with Claude Code running, binds the mic to that window, and starts listening. When you close the Terminal window, the listener shuts down on its own — no cleanup needed.
+On Linux `--here` is the default, and on Windows `narrate-claude` (a `.cmd` in `~\.local\bin`) always works this way. When `claude` exits, the mic and whisper.cpp go with it. In Terminal mode, closing the window stops the listener within seconds.
 
 Want a **Dock-friendly double-clickable icon**? See the [`.app` bundle recipe](#optional-wrap-it-in-a-app-bundle) below.
 
@@ -431,21 +436,19 @@ The one-click launcher starts `claude` inside `~/NarrateClaude`, so Claude Code 
 
 > Skip this section if you just want it to work. Keep reading if you like knowing *why*.
 
-### 🎙️ The listener is smart about ending sentences
+### 🎙️ How it knows you stopped talking
 
-Most dictation software detects "done talking" by watching the **microphone volume** — if it's quiet for a bit, you must be done. **This breaks the moment you have a fan, HVAC, background music, or any consistent noise** above the silence threshold.
-
-NarrateClaude instead watches the **transcribed text**. If Apple's speech engine has been returning the same words for 2.5 seconds, you're done — it commits the sentence and moves on. Works in noisy rooms, works with music playing, works on a plane with engines roaring.
+The listener cuts the mic audio into sentences with a small voice activity detector: speech starts when the sound rises a few times above the room's noise floor, and ends after about a second below it. The noise floor is the quietest moment of the last five seconds, so a fan or a hum becomes the new baseline instead of "talking". Each sentence goes to a whisper.cpp server that stays loaded, and whisper.cpp's own Silero VAD drops anything that isn't speech, so clicks and room noise never turn into text.
 
 ### 🔁 The mic pauses itself so the AI doesn't talk to itself
 
 When your Mac speaks the reply out loud, that sound comes out of your speakers, bounces around the room, and hits your microphone. Without special handling, the listener would hear *"Okay, I'm opening the file now..."*, transcribe it, and treat it as *your* next command — infinite feedback loop.
 
-Fix: the listener watches for the TTS playback process (`afplay`) and **auto-pauses** speech recognition while it's running. The moment the audio stops, the mic comes back on. Clean handoff every time.
+Fix: the listener watches for the voice playing (the Piper voice flags itself, and players like `afplay` are spotted by name) and **auto-pauses** while it plays. The moment the audio stops, the mic comes back on. Clean handoff every time.
 
 ### 🛡️ It's production-hardened, not a demo
 
-Running continuous speech recognition for hours is a different problem from running it for 30 seconds in a demo. Apple's speech engine can get stuck, leak memory, or degrade over time. NarrateClaude defends against all of that:
+Running continuous speech recognition for hours is a different problem from running it for 30 seconds in a demo. In `--apple` mode, Apple's speech engine can get stuck, leak memory, or degrade over time. NarrateClaude defends against all of that:
 
 - 🚨 **Wedge detection** — if the listener's audio queue grows too big without progress, or audio keeps arriving but the engine goes silent for 20 seconds, it assumes the speech engine is hung and exits. A supervisor restarts it fresh.
 - 🔄 **Preventive recycling** — every 5 minutes the listener exits cleanly and respawns. Stops slow degradation before it starts.
@@ -458,23 +461,22 @@ Environment variables for when you want to fiddle:
 
 | Knob | Default | What it does |
 |---|---:|---|
-| `LISTEN_STABILITY_SEC` | 2.5 | How long the text needs to stop changing before we finalize a sentence |
+| `NARRATE_WHISPER_MODEL` | by RAM | `large-v3-turbo`, `small.en`, `base.en`, `tiny.en`, or a path to a ggml `.bin` |
+| `NARRATE_WHISPER_LANG` | `en` | Spoken language (`auto` to detect; use a multilingual model) |
+| `LISTEN_SILENCE_SEC` | 1.0 | Silence that ends a sentence |
 | `LISTEN_MAX_UTTER_SEC` | 60 | Hard cap on a single utterance (seconds) |
-| `LISTEN_MAX_SESSION_SEC` | 300 | Force a clean respawn every N seconds (preventive) |
-| `LISTEN_WEDGE_BACKLOG` | 200 | Audio buffers piled up = engine is wedged, bail |
-| `LISTEN_SILENT_WEDGE_SEC` | 20 | Audio arriving but no recognition events this long = wedged, bail |
-| `LISTEN_DEBUG` | `0` | Set to `1` for noisy diagnostic logging |
+| `NARRATE_BARGE_IN` | `1` | A new sentence stops the voice and sends Escape first |
+| `NARRATE_STT` | `whisper` | `apple` for the Swift listener in Terminal mode |
+| `LISTEN_STABILITY_SEC` | 2.5 | `--apple` only: how long the text must stop changing |
+| `LISTEN_MAX_SESSION_SEC` | 300 | `--apple` only: clean respawn every N seconds |
+| `LISTEN_DEBUG` | `0` | `--apple` only: noisy diagnostic logging |
 
 
 ### 🧪 Something Not Working?
 
-### 🎤 "Speech recognition not authorized" or no mic input
+### 🎤 No mic input
 
-Open **System Settings → Privacy & Security**:
-- ✅ Enable **Microphone** for Terminal
-- ✅ Enable **Speech Recognition** for Terminal
-
-Both are required. Restart the listener after granting.
+macOS: **System Settings → Privacy & Security → Microphone**, enable your terminal app (and **Speech Recognition** too for `--apple`). Windows: **Settings → Privacy → Microphone**. Linux: check that `libportaudio2` is installed. Then start it again. `dictation/state/whisper-server.log` shows what whisper.cpp loaded.
 
 ### 🪟 "Couldn't find a Terminal window running claude" during setup
 
@@ -488,7 +490,7 @@ Check the error log:
 cat ~/NarrateClaude/dictation/state/dictation.log.stderr
 ```
 
-Most common cause: Microphone or Speech Recognition permission was revoked or never granted.
+Most common cause: Microphone permission (or, for `--apple`, Speech Recognition) was revoked or never granted.
 
 ### 🎤 Just want to check the mic is working at all
 
@@ -512,9 +514,7 @@ If the numbers stay at zero, macOS isn't letting the process access the mic — 
 
 PRs and issues super welcome, especially if you want to:
 
-- 🎙️ **Port the injector to iTerm2, Ghostty, Alacritty, or any other terminal** — right now it's Apple Terminal only, which limits who can use it
 - 🔊 **Add a TTS recipe** — Piper, local ElevenLabs, MLX-TTS, Kyutai Moshi, or any other offline voice synthesizer that slots into `~/.local/bin/speak`
-- 🧠 **Use a different STT engine** — Whisper.cpp, MLX-Whisper, etc. The rest of the pipeline doesn't care what's on the listening end
 - 🗣️ **Interruption detection** — let me cut off the TTS mid-sentence if I start talking again (barge-in)
 - 🐛 **Just tell me what's broken** — open an issue with the contents of `dictation/state/dictation.log` attached
 
@@ -522,14 +522,14 @@ Small PRs welcome. Huge PRs welcome. Ideas-with-no-code welcome.
 
 ### Running the tests
 
-The suite in [`tests/`](tests/) runs on Linux or macOS with no mic, no GPU, no model download and no network. Resemblyzer and the MLX judge are faked, and the bash scripts run against a temp copy of `dictation/`, so nothing touches your real `state/` or Terminal windows.
+The suite in [`tests/`](tests/) runs on Linux or macOS with no mic, no GPU, no model download and no network (whisper-server and Piper are faked, and a stub stands in for `claude`). Resemblyzer and the MLX judge are faked, and the bash scripts run against a temp copy of `dictation/`, so nothing touches your real `state/` or Terminal windows.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m pytest
 ```
 
-CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same suite on Ubuntu with Python 3.9 and 3.13, and on macOS, where it also compiles `Listen.swift` and `MicProbe.swift` with `swiftc`.
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same suite on Ubuntu with Python 3.9 and 3.13, and on macOS, where it also compiles `Listen.swift` and `MicProbe.swift` with `swiftc`. It also installs the real thing on Linux, macOS and Windows and runs [`tests/e2e_voice.py`](tests/e2e_voice.py): Piper speaks sentences into WAV files, whisper.cpp must hear them, and a stub `claude` in the loop's pty must receive them, with no mic and no speakers.
 
 
 ### 🧩 The Complete Local-First Stack
@@ -542,9 +542,9 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same suite 
       EARS + MOUTH             BRAIN                        HANDS
       (this repo)              ────────────────────         ──────────────────
       ─────────────────        MLX + Gemma / Llama     →    Chrome DevTools
-      Apple SFSpeech     →     Anthropic API server         iframes + Shadow DOM
+      whisper.cpp STT    →     Anthropic API server         iframes + Shadow DOM
       continuous listener      Tool-call parser (×3)        Brave browser control
-      AppleScript inject       Code mode, prompt cache      Snapshot + click + type
+      pty session inject       Code mode, prompt cache      Snapshot + click + type
       cloned-voice TTS         Narrative Gemma launcher     ──────────────────
       ─────────────────        ────────────────────         🔗 github.com/
       🔗 github.com/           🔗 github.com/                nicedreamzapp/

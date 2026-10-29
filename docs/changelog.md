@@ -7,6 +7,14 @@ description: NarrateClaude change history built from the git log, from the first
 
 There are no tagged releases. This list is built from the git history of `main`, newest first. Dates are commit dates.
 
+## 2026-10-29
+
+- whisper.cpp is the default speech to text, on macOS, Linux and Windows: a local whisper-server with a full-precision f16 model picked by memory (`large-v3-turbo`, `small.en`, `base.en`), Silero VAD, and an adaptive voice activity detector. Apple's recognizer stays as `narrate-claude --apple`.
+- Piper is the default voice when there is no `~/.local/bin/speak`.
+- `narrate-claude --here` runs `claude` in a pty the loop owns, so any terminal works; it is how Linux and Windows run.
+- `install.sh` builds whisper.cpp v1.9.5 and fetches pinned, checksummed models (`--skip-model` skips them); new `install.ps1` / `uninstall.ps1` for Windows. Uninstall keeps models unless `--purge`.
+- CI runs the whole loop end to end on Linux, macOS and Windows with WAV files and a stub `claude`.
+
 ## 2026-10-09
 
 - README notes that the listener uses the `en-US` recognizer and where the relevance judge looks for MLX (`~/.local/mlx-server/bin/python`). ([#4](https://github.com/nicedreamzapp/NarrateClaude/pull/4))

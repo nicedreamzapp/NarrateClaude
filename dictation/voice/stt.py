@@ -312,6 +312,8 @@ class WhisperServer:
 
 
 def _die_with_parent():
+    # Linux sends this signal when the *thread* that started the server
+    # exits, so start it from a thread that lives as long as the listener.
     try:
         import ctypes
         ctypes.CDLL("libc.so.6").prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG

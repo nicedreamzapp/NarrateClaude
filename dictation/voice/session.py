@@ -177,6 +177,9 @@ def start_listener(typist):
             if wavs:
                 for w in wavs:
                     listener.run_file(w)
+                # Stay alive: on Linux whisper-server is tied to the thread
+                # that started it (PR_SET_PDEATHSIG) and would die with it.
+                listener.stopping.wait()
                 return
             listener.run_mic()
         except Exception as e:
