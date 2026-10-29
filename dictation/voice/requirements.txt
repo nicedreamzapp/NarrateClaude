@@ -1,0 +1,7 @@
+# The voice loop's Python packages (install.sh / install.ps1 put them in a venv).
+# Speech to text is whisper.cpp (a binary, not a package); these are the mic,
+# the Piper voice and, on Windows, the pseudo-terminal.
+sounddevice==0.5.6
+piper-tts==1.8.0
+onnxruntime==1.31.1; python_version >= "3.11"
+pywinpty==3.1.2; sys_platform == "win32"

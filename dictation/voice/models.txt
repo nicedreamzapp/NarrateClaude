@@ -1,0 +1,9 @@
+# Pinned downloads: name  sha256  path-under-models/  url
+# Whisper models are the full-precision f16 ggml files (no quantized ones).
+large-v3-turbo 1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69 ggml-large-v3-turbo.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin
+small.en c6138d6d58ecc8322097e0f987c32f1be8bb0a18532a3f88f734d1bbf9c41e5d ggml-small.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.en.bin
+base.en a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002 ggml-base.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.en.bin
+tiny.en 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f ggml-tiny.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin
+silero-vad 2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 ggml-silero-v6.2.0.bin https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin
+piper-voice 4cabf7c3a638017137f34a1516522032d4fe3f38228a843cc9b764ddcbcd9e09 piper/en_US-lessac-high.onnx https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/lessac/high/en_US-lessac-high.onnx
+piper-voice-config db42b97d9859f257bc1561b8ed980e7fb2398402050a74ddd6cbec931a92412f piper/en_US-lessac-high.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/5041a7a49ae5b3a0f30e6837769eb03fdbb231bd/en/en_US/lessac/high/en_US-lessac-high.onnx.json

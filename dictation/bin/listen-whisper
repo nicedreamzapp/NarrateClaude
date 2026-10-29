@@ -1,0 +1,6 @@
+#!/bin/bash
+# listen-whisper: the whisper.cpp listener (one transcript per line on stdout).
+# Runs voice/stt.py with the voice loop's Python; see that file for options.
+# shellcheck source=dictation/bin/_pyenv disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/_pyenv"
+exec "${PY[@]}" "$VOICE_DIR/stt.py" "$@"

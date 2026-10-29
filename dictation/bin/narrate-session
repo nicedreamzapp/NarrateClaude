@@ -1,0 +1,6 @@
+#!/bin/bash
+# narrate-session: run claude in a terminal the voice loop owns.
+# Runs voice/session.py with the voice loop's Python; see that file for options.
+# shellcheck source=dictation/bin/_pyenv disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/_pyenv"
+exec "${PY[@]}" "$VOICE_DIR/session.py" "$@"

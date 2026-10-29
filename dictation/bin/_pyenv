@@ -1,0 +1,13 @@
+# _pyenv: sourced by the voice wrappers. Picks the Python that has the voice
+# loop's packages (the venv install.sh builds), and on Apple Silicon forces
+# arm64 so a Rosetta parent shell can't hand us an x86_64 interpreter.
+# shellcheck disable=SC2034  # PY and VOICE_DIR are used by the scripts that source this
+NARRATE_DATA="${NARRATE_DATA:-$HOME/.local/share/narrateclaude}"
+_py="$NARRATE_DATA/venv/bin/python"
+[ -x "$_py" ] || _py="$(command -v python3 || echo python3)"
+PY=("$_py")
+if [ "$(uname -s)" = Darwin ] && [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null)" = 1 ]; then
+    PY=(/usr/bin/arch -arm64 "$_py")
+fi
+VOICE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../voice" && pwd)"
+export NARRATE_DATA

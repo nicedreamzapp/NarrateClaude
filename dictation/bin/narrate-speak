@@ -1,0 +1,6 @@
+#!/bin/bash
+# narrate-speak: the default local voice (Piper TTS).
+# Runs voice/speak.py with the voice loop's Python; see that file for options.
+# shellcheck source=dictation/bin/_pyenv disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/_pyenv"
+exec "${PY[@]}" "$VOICE_DIR/speak.py" "$@"
