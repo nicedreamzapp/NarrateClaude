@@ -62,3 +62,73 @@ jobs:
 
       - name: Run tests
         run: python -m pytest
+
+  # The real voice loop with no mic and no speakers: install.sh builds
+  # whisper.cpp at the pinned release and fetches a small f16 model, then
+  # tests/e2e_voice.py runs Piper -> WAV -> VAD -> whisper.cpp -> a stub
+  # claude in the loop's own pty. Then uninstall --purge must clean up.
+  voice-e2e:
+    name: voice loop end to end (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    env:
+      NARRATE_WHISPER_MODEL: base.en
+      KIT_NONINTERACTIVE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Linux build tools and PortAudio
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q cmake g++ python3-venv libportaudio2
+
+      - name: install.sh
+        run: bash install.sh
+
+      - name: install.sh again (idempotent, no rebuild, no re-download)
+        run: |
+          bash install.sh | tee second.log
+          grep -q "already built" second.log
+          grep -q "have ggml-base.en.bin" second.log
+
+      - name: End-to-end voice loop
+        run: ~/.local/share/narrateclaude/venv/bin/python tests/e2e_voice.py
+
+      - name: uninstall.sh --purge
+        run: |
+          bash uninstall.sh --purge
+          test ! -e ~/.local/share/narrateclaude
+          test ! -e ~/.local/bin/narrate-claude
+
+  voice-windows:
+    name: voice loop end to end (windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      NARRATE_WHISPER_MODEL: base.en
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: install.ps1 (Windows PowerShell 5.1)
+        shell: powershell
+        run: .\install.ps1
+
+      - name: End-to-end voice loop
+        shell: powershell
+        run: |
+          & "$env:LOCALAPPDATA\narrateclaude\venv\Scripts\python.exe" tests\e2e_voice.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: uninstall.ps1 -Purge
+        shell: powershell
+        run: |
+          .\uninstall.ps1 -Purge
+          if (Test-Path "$env:LOCALAPPDATA\narrateclaude") { throw "data dir left behind" }
+          if (Test-Path "$HOME\.local\bin\narrate-claude.cmd") { throw "launcher left behind" }
