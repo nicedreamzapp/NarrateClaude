@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NarrateClaude uninstaller (macOS).
+# NarrateClaude uninstaller (macOS and Linux; Windows uses uninstall.ps1).
 #
 #   curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash -s -- --purge
@@ -7,8 +7,10 @@
 #
 # Stops the listener (`dictation stop`), removes the narrate-claude link (only
 # if it points into the checkout), the ~/.local/bin/speak wrapper (only if the
-# installer wrote it) and the compiled listener. --purge also deletes the clone
-# in NARRATE_DIR, including dictation/state. Never touches ~/.claude.
+# installer wrote it), the compiled listener, and the voice loop in NARRATE_DATA
+# (whisper.cpp and the venv). Downloaded models are kept so a reinstall needs no
+# download; --purge deletes them and the clone in NARRATE_DIR, including
+# dictation/state. Never touches ~/.claude.
 # Same environment variables as install.sh.
 
 set -euo pipefail
@@ -28,6 +30,7 @@ main() {
   local bindir="${KIT_BIN_DIR:-$HOME/.local/bin}"
   local speak="$HOME/.local/bin/speak"
   local link="$bindir/narrate-claude"
+  local data="${NARRATE_DATA:-$HOME/.local/share/narrateclaude}"
 
   # Checkouts the install may have used: this script's own, the one the
   # launcher link points at, and NARRATE_DIR.
@@ -71,7 +74,26 @@ main() {
     say "removed $speak"
   fi
 
-  # 4. --purge: the clone (state included).
+  # 4. The voice loop: whisper.cpp and the venv; models only with --purge.
+  #    Only a directory that looks like ours (models/ or whisper.cpp/ inside).
+  if [ -d "$data" ] && { [ -d "$data/models" ] || [ -d "$data/whisper.cpp" ] || [ -d "$data/venv" ]; }; then
+    local part
+    for part in whisper.cpp whisper venv; do
+      if [ -e "$data/$part" ]; then
+        rm -rf "${data:?}/$part"
+        say "removed $data/$part"
+      fi
+    done
+    if [ "$purge" = 1 ]; then
+      rm -rf "${data:?}/models"
+      rmdir "$data" 2>/dev/null || true
+      say "removed $data/models"
+    elif [ -d "$data/models" ]; then
+      say "kept the models in $data/models (--purge deletes them)"
+    fi
+  fi
+
+  # 5. --purge: the clone (state included).
   if [ "$purge" = 1 ]; then
     if [ -f "$dir/narrative-claude.sh" ] && [ -d "$dir/dictation" ]; then
       rm -rf "$dir"
