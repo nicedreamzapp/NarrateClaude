@@ -96,7 +96,7 @@ No big tech cloud. No paid AI API. The Max plan is already paid; nothing else co
 
 **That whole conversation happens without touching the internet.** 🔒 No cloud. No API bills. No one listening in. Works on a plane. Works in a vault. Works when your Wi-Fi dies.
 
-Your voice goes into Apple's built-in speech engine (the same one that powers macOS Dictation, but running continuously). The text gets typed into Claude Code, which you can point at a local AI model on your Mac with [claude-code-local](https://github.com/nicedreamzapp/claude-code-local). The model's reply comes out through a cloned copy of **your own voice**. And the mic is smart enough to not listen to itself talking — so there's no weird feedback loops.
+Your voice goes into [whisper.cpp](https://github.com/ggml-org/whisper.cpp), running Whisper on your own machine at full precision, listening continuously. The text gets typed into Claude Code, which you can point at a local AI model on your Mac with [claude-code-local](https://github.com/nicedreamzapp/claude-code-local). The model's reply comes out through a cloned copy of **your own voice**. And the mic is smart enough to not listen to itself talking — so there's no weird feedback loops.
 
 It's Siri, if Siri was actually private, actually smart, and actually sounded like you.
 
@@ -133,7 +133,7 @@ You don't sit down at a workstation and stop living. You **go about your life**,
 
 ### 🌱 This is the first step
 
-NarrateClaude 1.0 is just the first tooth on the gear. It gets Apple's on-device speech engine talking to a local LLM on your Mac in a loop that stays **100% private**. It proves a voice-first interface to a real coding environment isn't just possible — it's *usable*. (I'm using it right now, as I write this, without touching a keyboard for long stretches.)
+NarrateClaude 1.0 is just the first tooth on the gear. It gets an on-device speech engine talking to a local LLM on your machine in a loop that stays **100% private**. It proves a voice-first interface to a real coding environment isn't just possible — it's *usable*. (I'm using it right now, as I write this, without touching a keyboard for long stretches.)
 
 But the north star is bigger than one mode on one Mac. It's a full ambient-computing stack where **screens are optional, typing is optional, sitting in one place is optional** — and the only thing that isn't optional is that **your data and your voice never leave your house**. 🔒
 
@@ -192,7 +192,7 @@ The v2 code lives in a local `dictation-v2/` Swift Package that is **not publish
 ### 🎯 The simple version
 Most "AI voice assistants" — even the ones you're thinking of right now — send your voice to a server, wait for that server to transcribe it, wait for another server to think about it, wait for a third server to turn the answer back into audio, and then play it. **Every step leaves your house.** Every step costs money. Every step stops working the second your Wi-Fi drops.
 
-NarrateClaude doesn't do that. It uses a trick almost nobody is using publicly: **Apple has shipped a legit on-device speech engine with every Mac for years**, and it's just sitting there, free, fast, private. This project wraps it in a smart listener that runs continuously and ties it to a local AI brain and your own cloned voice. Push a button, start talking, and your Mac becomes a genuine conversation partner that never phones home.
+NarrateClaude doesn't do that. It runs **whisper.cpp on your own machine**: open source, free, fast, private, on Mac, Linux and Windows. This project wraps it in a smart listener that runs continuously and ties it to a local AI brain and your own cloned voice. Push a button, start talking, and your Mac becomes a genuine conversation partner that never phones home.
 
 ### 🧱 What it connects to
 By default, NarrateClaude is the *voice* half of a bigger setup: **[claude-code-local](https://github.com/nicedreamzapp/claude-code-local)** — which runs Claude Code (the AI coding tool) against a local AI model on your Mac. Together they mean you can *talk to Claude Code*, have it *narrate what it's doing* through your speakers, and never leak a single keystroke, file path, or voice sample to the cloud.
@@ -480,7 +480,7 @@ macOS: **System Settings → Privacy & Security → Microphone**, enable your te
 
 ### 🪟 "Couldn't find a Terminal window running claude" during setup
 
-Make sure Claude Code is running in **Apple's Terminal.app** (not iTerm2, not Warp, not Ghostty — those aren't supported yet because the injector uses Terminal-specific AppleScript). Then run `dictation setup` from *inside* that window.
+In the default Mac mode, make sure Claude Code is running in **Apple's Terminal.app** (the injector uses Terminal-specific AppleScript), then run `dictation setup` from *inside* that window. In any other terminal, use `narrate-claude --here`, which runs Claude in its own session and needs no AppleScript.
 
 ### 🔁 Listener keeps exiting and restarting
 
@@ -577,7 +577,7 @@ Think of it as hi-fi audio gear: the speakers and the amplifier are separate com
 
 Voice on the Mac has a lot of good people working on it. If you want to build your own loop, or swap a piece of this one:
 
-- **[whisper.cpp](https://github.com/ggml-org/whisper.cpp)** runs OpenAI's Whisper locally and fast on Apple Silicon. A strong alternative to Apple's recognizer, especially for accents and technical words.
+- **[whisper.cpp](https://github.com/ggml-org/whisper.cpp)** runs OpenAI's Whisper locally and fast on Apple Silicon. NarrateClaude's default speech engine since v2, strong on accents and technical words.
 - **[RealtimeSTT](https://github.com/KoljaB/RealtimeSTT)** is a low-latency speech-to-text library with voice activity detection and wake words built in. Good if you want a listener in Python.
 - **[mlx-audio](https://github.com/Blaizzy/mlx-audio)** does text-to-speech, speech-to-text and speech-to-speech on MLX. Plenty of voices to plug into `~/.local/bin/speak`.
 
