@@ -28,7 +28,13 @@ def run(cmd, env=None, input=None, timeout=30):
     "dictation/bin/dictation",
     "dictation/bin/dispatch",
     "dictation/bin/inject",
+    "dictation/bin/listen-whisper",
+    "dictation/bin/narrate-speak",
+    "dictation/bin/narrate-session",
+    "dictation/bin/_pyenv",
     "narrative-claude.sh",
+    "install.sh",
+    "uninstall.sh",
 ])
 def test_bash_syntax(script):
     r = run(["bash", "-n", str(REPO / script)])
@@ -313,3 +319,109 @@ def test_launcher_find_repo_follows_relative_symlink_chain(tmp_path):
         r = run(["bash", str(entry)])
         assert r.returncode == 0, r.stderr
         assert os.path.realpath(r.stdout.strip()) == os.path.realpath(repo)
+
+
+# --- dispatch picks the listener ----------------------------------------------
+
+
+def _whisper_tree(tmp_path, check_ok=True):
+    root = make_dictation_tree(tmp_path, "bin/dispatch", "filter/relevance.py")
+    (root / "state" / "target.json").write_text('{ "app": "Terminal", "window_id": 7 }')
+    out = tmp_path / "which.txt"
+    # A fake whisper listener: --check answers, a normal run says who it is.
+    write_exe(root / "bin" / "listen-whisper", "\n".join([
+        "#!/bin/bash",
+        'if [ "${1:-}" = --check ]; then',
+        "  echo 'whisper.cpp ggml-test.bin'" if check_ok else "  exit 1",
+        "  exit 0",
+        "fi",
+        f'echo whisper >> "{out}"',
+        "",
+    ]))
+    write_exe(root / "bin" / "listen", f'#!/bin/bash\necho apple >> "{out}"\n')
+    write_exe(root / "bin" / "inject", "#!/bin/bash\n")
+    return root, out
+
+
+@pytest.mark.skipif(IS_MACOS, reason="the watchdog would query the real Terminal.app")
+@pytest.mark.parametrize("check_ok,stt,expect", [
+    (True, None, "whisper"),          # whisper.cpp is the default
+    (True, "apple", "apple"),         # NARRATE_STT=apple picks Apple speech
+    (False, None, "apple"),           # whisper not installed: fall back
+])
+def test_dispatch_picks_listener(tmp_path, check_ok, stt, expect):
+    root, out = _whisper_tree(tmp_path, check_ok)
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {"HOME": str(home)}
+    if stt:
+        env["NARRATE_STT"] = stt
+    r = run(["bash", str(root / "bin" / "dispatch")], env=env, timeout=60)
+    assert r.returncode == 0, r.stderr
+    assert out.read_text().split()[0] == expect
+    log = (root / "state" / "dictation.log").read_text()
+    assert "listener: " + ("whisper.cpp ggml-test.bin" if expect == "whisper" else "Apple speech") in log
+
+
+# --- launcher flags -------------------------------------------------------------
+
+
+def test_launcher_rejects_unknown_flag():
+    r = run(["bash", str(REPO / "narrative-claude.sh"), "--nope"])
+    assert r.returncode == 2 and "unknown option" in r.stderr
+
+
+def test_launcher_here_runs_the_session(tmp_path):
+    """--here execs narrate-session with claude; a fake session records it."""
+    repo = tmp_path / "repo"
+    (repo / "dictation" / "bin").mkdir(parents=True)
+    shutil.copy2(REPO / "narrative-claude.sh", repo / "narrative-claude.sh")
+    write_exe(repo / "dictation" / "bin" / "dictation", "#!/bin/bash\n")
+    write_exe(repo / "dictation" / "bin" / "narrate-session",
+              '#!/bin/bash\necho "$PWD|$CLAUDE_SESSION_LABEL|$*"\n')
+    r = run(["bash", str(repo / "narrative-claude.sh"), "--here"])
+    assert r.returncode == 0, r.stderr
+    cwd, label, args = r.stdout.strip().split("|")
+    assert os.path.realpath(cwd) == os.path.realpath(repo)
+    assert label == "NarrativeClaude" and args == "-- claude"
+    r = run(["bash", str(repo / "narrative-claude.sh"), "--here", "--apple"])
+    assert r.returncode == 2 and "needs Terminal mode" in r.stderr
+
+
+# --- install.sh / uninstall.sh voice parts (no network, no builds) --------------
+
+
+def test_install_rejects_unknown_flag(tmp_path):
+    r = run(["bash", str(REPO / "install.sh"), "--bogus"], env={"HOME": str(tmp_path)})
+    assert r.returncode != 0 and "usage: install.sh [--skip-model]" in r.stderr
+
+
+def test_uninstall_keeps_models_unless_purge(tmp_path):
+    home = tmp_path / "home"
+    data = home / ".local" / "share" / "narrateclaude"
+    for d in ("whisper.cpp/build/bin", "venv/bin", "models/piper"):
+        (data / d).mkdir(parents=True)
+    (data / "models" / "ggml-base.en.bin").write_bytes(b"x")
+    (home / "NarrateClaude").mkdir()  # NARRATE_DIR exists but is not a checkout
+    env = {"HOME": str(home)}
+    r = run(["bash", str(REPO / "uninstall.sh")], env=env)
+    assert r.returncode == 0, r.stderr
+    assert not (data / "whisper.cpp").exists() and not (data / "venv").exists()
+    assert (data / "models" / "ggml-base.en.bin").exists()
+    assert "kept the models" in r.stdout
+    r = run(["bash", str(REPO / "uninstall.sh"), "--purge"], env=env)
+    assert r.returncode == 0, r.stderr
+    assert not data.exists()
+    assert (home / "NarrateClaude").exists()  # not ours, never deleted
+    # Safe to run again with nothing left.
+    assert run(["bash", str(REPO / "uninstall.sh"), "--purge"], env=env).returncode == 0
+
+
+def test_uninstall_leaves_a_foreign_data_dir(tmp_path):
+    home = tmp_path / "home"
+    data = tmp_path / "elsewhere"
+    data.mkdir(parents=True)
+    (data / "keep.txt").write_text("not ours")
+    r = run(["bash", str(REPO / "uninstall.sh"), "--purge"], env={"HOME": str(home), "NARRATE_DATA": str(data)})
+    assert r.returncode == 0
+    assert (data / "keep.txt").exists()

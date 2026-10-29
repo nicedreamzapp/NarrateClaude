@@ -84,6 +84,9 @@ pkill -f afplay 2>/dev/null
 pkill -f speak-stop-ui 2>/dev/null
 pkill -f "piper -m" 2>/dev/null; pkill -f "mlx_audio.tts.generate" 2>/dev/null
 pkill -x say 2>/dev/null
+# The built-in Piper voice (voice/speak.py) records its pid while it plays.
+SPEAK_PID=$(cat "$DICT_DIR/state/speaking.pid" 2>/dev/null)
+[ -n "$SPEAK_PID" ] && kill "$SPEAK_PID" 2>/dev/null
 
 # Two-stage submission:
 #   1. `do script` writes the text + \n to the pty. Most of the time the

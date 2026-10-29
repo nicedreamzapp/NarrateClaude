@@ -1,6 +1,14 @@
 #!/bin/bash
 # narrative-claude.sh — one-click launcher for hands-free Claude Code.
 #
+#   narrate-claude            macOS: a new Apple Terminal window (below)
+#   narrate-claude --here     any terminal, macOS or Linux (the default on
+#                             Linux): claude runs right here inside the voice
+#                             loop's own pty (dictation/voice/session.py)
+#   narrate-claude --apple    macOS Terminal mode with Apple's recognizer
+#                             instead of whisper.cpp
+#
+# Terminal mode:
 # 1. Stops any previously-running dictation listener.
 # 2. Tells Apple Terminal to open a new window running `claude`, and
 #    captures the window ID of that new window.
@@ -50,6 +58,27 @@ fi
 DICT_DIR="$REPO_DIR/dictation"
 DICT="$DICT_DIR/bin/dictation"
 STATE_DIR="$DICT_DIR/state"
+
+MODE=terminal
+[ "$(uname -s)" = Darwin ] || MODE=here
+for arg in "$@"; do
+    case "$arg" in
+        --here) MODE=here ;;
+        --apple) export NARRATE_STT=apple ;;
+        -h|--help) sed -n '2,12p' "$REPO_DIR/narrative-claude.sh"; exit 0 ;;
+        *) echo "narrate-claude: unknown option $arg (try --help)" >&2; exit 2 ;;
+    esac
+done
+
+if [ "$MODE" = here ]; then
+    if [ "${NARRATE_STT:-}" = apple ]; then
+        echo "narrate-claude: --apple needs Terminal mode (drop --here)" >&2
+        exit 2
+    fi
+    cd "$REPO_DIR" || exit 1
+    export CLAUDE_SESSION_LABEL='NarrativeClaude'
+    exec "$DICT_DIR/bin/narrate-session" -- claude
+fi
 
 # 1. Kill any previous listener so the new window owns the mic.
 if [ -x "$DICT" ]; then

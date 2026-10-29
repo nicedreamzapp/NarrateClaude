@@ -1,6 +1,10 @@
 #!/bin/bash
-# dispatch — long-running pipeline that runs the Swift listener and pastes
-# each transcribed utterance into the bound Terminal window.
+# dispatch — long-running pipeline that runs the listener and pastes each
+# transcribed utterance into the bound Terminal window.
+#
+# The listener is whisper.cpp (bin/listen-whisper) by default. NARRATE_STT=apple
+# picks the Swift/Apple-speech listener (bin/listen) instead, and dispatch
+# also falls back to it when whisper.cpp isn't installed.
 #
 # Reads target window ID from state/target.json fresh on every utterance
 # (via inject), so re-binding while running just works.
@@ -11,6 +15,8 @@ set -uo pipefail
 
 DICT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LISTEN_BIN="$DICT_DIR/bin/listen"
+WHISPER_LISTEN="$DICT_DIR/bin/listen-whisper"
+WHISPER_PY="$DICT_DIR/voice/stt.py"
 INJECT_BIN="$DICT_DIR/bin/inject"
 TARGET_FILE="$DICT_DIR/state/target.json"
 LOG_FILE="$DICT_DIR/state/dictation.log"
@@ -33,8 +39,18 @@ VOICEPRINT_FILE="$DICT_DIR/state/voiceprint.npy"
 SHUTDOWN_FLAG="$DICT_DIR/state/.shutdown"
 rm -f "$SHUTDOWN_FLAG"
 
-if [ ! -x "$LISTEN_BIN" ]; then
-    echo "dispatch: listener not compiled at $LISTEN_BIN" >&2
+# Pick the listener. Whisper prints the model it will load on --check.
+STT="${NARRATE_STT:-whisper}"
+LISTEN_CMD=()
+if [ "$STT" != "apple" ] && [ -x "$WHISPER_LISTEN" ] && STT_INFO=$("$WHISPER_LISTEN" --check 2>/dev/null); then
+    LISTEN_CMD=("$WHISPER_LISTEN")
+elif [ -x "$LISTEN_BIN" ]; then
+    LISTEN_CMD=("$LISTEN_BIN")
+    STT_INFO="Apple speech"
+    [ "$STT" != "apple" ] && STT_INFO="Apple speech (whisper.cpp not installed)"
+fi
+if [ "${#LISTEN_CMD[@]}" -eq 0 ]; then
+    echo "dispatch: listener not compiled at $LISTEN_BIN and whisper.cpp is not installed (run install.sh)" >&2
     exit 1
 fi
 if [ ! -f "$TARGET_FILE" ]; then
@@ -43,7 +59,7 @@ if [ ! -f "$TARGET_FILE" ]; then
 fi
 
 ts() { date "+%H:%M:%S"; }
-echo "[$(ts)] dispatch starting" >> "$LOG_FILE"
+echo "[$(ts)] dispatch starting, listener: $STT_INFO" >> "$LOG_FILE"
 
 # When this script exits for any reason, take the listener with us.
 cleanup() {
@@ -66,6 +82,7 @@ _request_shutdown() {
     # read, which made the old TERM-based approach race-lose.
     touch "$SHUTDOWN_FLAG"
     pkill -f "$LISTEN_BIN" 2>/dev/null || true
+    pkill -f "$WHISPER_PY" 2>/dev/null || true
 }
 
 window_watchdog() {
@@ -144,6 +161,8 @@ while true; do
     # mismatch, the filter dies, and the listener crash-loops forever.
     if [ -x "$FILTER_VENV" ] && [ -f "$FILTER_PY" ] && [ -f "$VOICEPRINT_FILE" ]; then
         FILTER_CMD=(/usr/bin/arch -arm64 "$FILTER_VENV" "$FILTER_PY")
+        # The voiceprint filter scores the audio: whisper hands it each wav.
+        export LISTEN_EMIT_WAV=1
     else
         FILTER_CMD=(cat)
     fi
@@ -158,7 +177,7 @@ while true; do
         RELEVANCE_CMD=(cat)
     fi
 
-    "$LISTEN_BIN" 2>>"$ERR_LOG" | "${FILTER_CMD[@]}" 2>>"$ERR_LOG" | "${RELEVANCE_CMD[@]}" 2>>"$ERR_LOG" | while IFS= read -r line; do
+    "${LISTEN_CMD[@]}" 2>>"$ERR_LOG" | "${FILTER_CMD[@]}" 2>>"$ERR_LOG" | "${RELEVANCE_CMD[@]}" 2>>"$ERR_LOG" | while IFS= read -r line; do
         [ -z "$line" ] && continue
         printf "[%s] %s\n" "$(ts)" "$line" >> "$LOG_FILE"
         "$INJECT_BIN" "$line" >> "$INJ_LOG" 2>&1 || true

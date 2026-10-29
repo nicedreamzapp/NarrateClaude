@@ -3,8 +3,9 @@
 
 Fires every time Claude finishes responding. Pulls the last assistant
 message from the transcript JSONL, scrubs out code/markdown noise that
-sounds bad spoken, and pipes the result through Kokoro-82M Heart (af_heart)
-via ~/.local/bin/speak (or $NARRATE_SPEAK). So you never have to look at the
+sounds bad spoken, and says it through ~/.local/bin/speak (or $NARRATE_SPEAK),
+your own TTS. With neither, it uses the built-in local Piper voice
+(bin/narrate-speak) when that is installed. So you never have to look at the
 terminal to know what Claude said.
 
 Stays out of its own way:
@@ -22,6 +23,9 @@ import sys
 from pathlib import Path
 
 SPEAK = os.environ.get("NARRATE_SPEAK") or str(Path.home() / ".local" / "bin" / "speak")
+# The open-source default voice, used only when there is no speak at all.
+BUILTIN_SPEAK = str(Path(__file__).resolve().parent / "narrate-speak")
+BUILTIN_DATA = os.environ.get("NARRATE_DATA") or str(Path.home() / ".local" / "share" / "narrateclaude")
 MAX_LEN = 1200
 
 # Master switch: the hook stays registered permanently, but only speaks
@@ -109,10 +113,13 @@ def main() -> int:
         return 0
     if len(text) > MAX_LEN:
         text = text[:MAX_LEN].rsplit(" ", 1)[0] + "… and there's more on screen."
-    if not os.path.exists(SPEAK):
-        return 0
+    speak = SPEAK
+    if not os.path.exists(speak):
+        if not (os.path.exists(BUILTIN_SPEAK) and os.path.isdir(os.path.join(BUILTIN_DATA, "venv"))):
+            return 0
+        speak = BUILTIN_SPEAK
     try:
-        subprocess.Popen([SPEAK, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen([speak, text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception:
         pass
     return 0

@@ -153,8 +153,19 @@ def test_main_silent_when_flag_off(hook, monkeypatch, tmp_path):
 def test_main_silent_when_speak_missing(hook, monkeypatch, tmp_path):
     t = write_transcript(tmp_path / "t.jsonl", [assistant("hello")])
     monkeypatch.setattr(hook, "SPEAK", str(tmp_path / "no-speak"))
+    monkeypatch.setattr(hook, "BUILTIN_DATA", str(tmp_path / "no-data"))
     assert run_hook(hook, monkeypatch, {"transcript_path": t}) == 0
     assert hook.spoken == []
+
+
+def test_main_falls_back_to_the_builtin_voice(hook, monkeypatch, tmp_path):
+    """No speak of your own, but the Piper voice is installed: use it."""
+    t = write_transcript(tmp_path / "t.jsonl", [assistant("hello there")])
+    monkeypatch.setattr(hook, "SPEAK", str(tmp_path / "no-speak"))
+    (tmp_path / "data" / "venv").mkdir(parents=True)
+    monkeypatch.setattr(hook, "BUILTIN_DATA", str(tmp_path / "data"))
+    assert run_hook(hook, monkeypatch, {"transcript_path": t}) == 0
+    assert hook.spoken == [[hook.BUILTIN_SPEAK, "hello there"]]
 
 
 @pytest.mark.parametrize("payload", ["not json", {}, {"transcript_path": ""}])

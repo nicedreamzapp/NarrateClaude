@@ -25,6 +25,8 @@ set -euo pipefail
 DICT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$DICT_DIR/src/Listen.swift"
 LISTEN_BIN="$DICT_DIR/bin/listen"
+WHISPER_LISTEN="$DICT_DIR/bin/listen-whisper"
+WHISPER_PY="$DICT_DIR/voice/stt.py"
 INJECT_BIN="$DICT_DIR/bin/inject"
 STATE_DIR="$DICT_DIR/state"
 TARGET_FILE="$STATE_DIR/target.json"
@@ -35,6 +37,21 @@ mkdir -p "$STATE_DIR"
 
 cmd="${1:-status}"
 shift || true
+
+# The whisper.cpp listener is the default; the Swift one is the fallback.
+whisper_ready() {
+    [ "${NARRATE_STT:-whisper}" != "apple" ] && [ -x "$WHISPER_LISTEN" ] &&
+        "$WHISPER_LISTEN" --check >/dev/null 2>&1
+}
+
+stop_whisper_server() {
+    local pidf="$STATE_DIR/whisper-server.pid" pid
+    pid=$(cat "$pidf" 2>/dev/null || true)
+    if [ -n "$pid" ] && ps -o command= -p "$pid" 2>/dev/null | grep -q whisper-server; then
+        kill "$pid" 2>/dev/null || true
+    fi
+    rm -f "$pidf"
+}
 
 is_running() {
     [ -f "$PID_FILE" ] || return 1
@@ -86,7 +103,15 @@ OSA
 JSON
     echo "Bound to Terminal window $win_id"
 
-    # 2. Compile Listen.swift
+    # 2. Compile Listen.swift (only needed for the Apple-speech fallback)
+    if whisper_ready; then
+        echo "Listener: whisper.cpp ($("$WHISPER_LISTEN" --check 2>/dev/null))"
+        chmod +x "$INJECT_BIN" "$DICT_DIR/bin/dictation"
+        echo
+        echo "Setup complete."
+        echo "Next: dictation start"
+        exit 0
+    fi
     if [ ! -f "$SRC" ]; then
         echo "setup: missing $SRC" >&2
         exit 1
@@ -120,7 +145,7 @@ start)
     esac
     echo "[$(date '+%H:%M:%S')] dictation: authorized launcher = $LAUNCHER" >> "$LOG_FILE"
 
-    if [ ! -x "$LISTEN_BIN" ]; then
+    if ! whisper_ready && [ ! -x "$LISTEN_BIN" ]; then
         echo "start: listener not compiled. Run: dictation setup" >&2
         exit 1
     fi
@@ -136,6 +161,8 @@ start)
     # a respawn loop, churning out duplicate listeners. Always nuke first.
     pkill -9 -f "$DICT_DIR/bin/dispatch" 2>/dev/null || true
     pkill -9 -f "$DICT_DIR/bin/listen" 2>/dev/null || true
+    pkill -9 -f "$WHISPER_PY" 2>/dev/null || true
+    stop_whisper_server
     rm -f "$PID_FILE"
     sleep 0.3
 
@@ -166,6 +193,7 @@ start)
 stop)
     if ! is_running; then
         echo "Not running."
+        stop_whisper_server
         rm -f "$PID_FILE"
         exit 0
     fi
@@ -176,6 +204,8 @@ stop)
     kill "$pid" 2>/dev/null || true
     pkill -f "$DICT_DIR/bin/dispatch" 2>/dev/null || true
     pkill -f "$DICT_DIR/bin/listen" 2>/dev/null || true
+    pkill -f "$WHISPER_PY" 2>/dev/null || true
+    stop_whisper_server
     rm -f "$PID_FILE"
     echo "Stopped."
     ;;
@@ -199,7 +229,9 @@ status)
     else
         echo "Bound:     (none — run dictation setup)"
     fi
-    if [ -x "$LISTEN_BIN" ]; then
+    if whisper_ready; then
+        echo "Listener:  $("$WHISPER_LISTEN" --check 2>/dev/null)"
+    elif [ -x "$LISTEN_BIN" ]; then
         echo "Listener:  compiled ($LISTEN_BIN)"
     else
         echo "Listener:  not compiled"
