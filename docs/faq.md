@@ -41,9 +41,9 @@ The listener and injector do not care what runs in the window. `dictation setup`
 
 Say "Claude tune out". Say "Claude tune in" to resume. Or run `dictation stop`.
 
-## Why must it live in `~/NarrateClaude`?
+## Does it have to live in `~/NarrateClaude`?
 
-`narrative-claude.sh` has `$HOME/NarrateClaude` hard-coded, and it starts `claude` there so `CLAUDE.md` is loaded. The scripts under `dictation/bin` find their own folder, so they work from anywhere.
+No. `narrative-claude.sh` finds its own folder (following symlinks, so an `.app` wrapper or the `narrate-claude` link works) and starts `claude` there so `CLAUDE.md` is loaded. If the script was copied out of the repo, it falls back to `$NARRATE_DIR`, then `~/NarrateClaude`. The scripts under `dictation/bin` find their own folder too.
 
 ## What happens if I close the Terminal window?
 

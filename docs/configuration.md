@@ -125,17 +125,29 @@ See [How it works](how-it-works.md#relevance-filter) for the full decision order
 
 ## Stop hook (`speak-on-stop`)
 
-A Claude Code Stop hook that reads the last assistant message aloud. Its settings are constants at the top of the file:
+A Claude Code Stop hook that reads the last assistant message aloud. Its settings are at the top of the file:
 
-| Constant | Value in repo | Change it to |
+| Setting | Default | Notes |
 |---|---|---|
-| `SPEAK` | the author's `~/.local/bin/speak`, as an absolute path | Your own `~/.local/bin/speak` path, written out in full. |
-| `FLAG` | the author's `~/.claude/narration.on`, as an absolute path | Any path. The hook only speaks while this file exists. |
+| `SPEAK` | `$NARRATE_SPEAK`, else `~/.local/bin/speak` | The program that speaks the text. |
+| `FLAG` | `$NARRATE_FLAG`, else `~/.claude/narration.on` | The hook only speaks while this file exists. |
 | `MAX_LEN` | `1200` | Characters before the text is cut and "and there's more on screen." is appended. |
 
 Before speaking, it replaces fenced code with "[code block on screen]", strips Markdown markers, replaces URLs with "link" and paths with "a file".
 
-Register it in Claude Code's settings as a `Stop` hook command. **TODO-VERIFY:** the exact `settings.json` snippet against the current [Claude Code hooks docs](https://docs.anthropic.com/en/docs/claude-code/hooks). The repo does not include one. Note that `CLAUDE.md` already tells Claude to speak through `speak`, so running both may read replies twice.
+Register it in Claude Code's settings as a `Stop` hook command ([hooks docs](https://docs.anthropic.com/en/docs/claude-code/hooks)); `install.sh` prints this snippet with your path filled in:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "/path/to/NarrateClaude/dictation/bin/speak-on-stop" } ] }
+    ]
+  }
+}
+```
+
+Then `touch ~/.claude/narration.on` to turn it on. Note that `CLAUDE.md` already tells Claude to speak through `speak`, so running both may read replies twice.
 
 The docstring mentions Kokoro-82M. The code just runs whatever `SPEAK` points to.
 
@@ -143,7 +155,7 @@ The docstring mentions Kokoro-82M. The code just runs whatever `SPEAK` points to
 
 | Path | Written by | Contents |
 |---|---|---|
-| `dictation/bin/listen` | `dictation setup` | Compiled listener (git-ignored). |
+| `dictation/bin/listen` | `dictation setup` or `install.sh` | Compiled listener (git-ignored). |
 | `dictation/state/target.json` | `setup`, `narrative-claude.sh` | `{ "app": "Terminal", "window_id": N }`. Re-read on every inject and every watchdog tick, so you can re-bind without restarting. |
 | `dictation/state/listener.pid` | `dictation start` | PID of `dispatch`. |
 | `dictation/state/dictation.log` | `dispatch`, `dictation start` | Accepted lines and pipeline events. |
@@ -155,7 +167,7 @@ The docstring mentions Kokoro-82M. The code just runs whatever `SPEAK` points to
 | `dictation/state/dropped.log` | both filters | Dropped lines. |
 | `dictation/state/filter.log` | `filter.py` | Voiceprint decisions. |
 | `dictation/state/voiceprint.npy` | `enroll.py` | 256-dim voiceprint. |
-| `~/.local/bin/speak` | you | The voice. Called by Claude through `CLAUDE.md` and by `speak-on-stop`. |
+| `~/.local/bin/speak` | you, or `install.sh` if missing | The voice. Called by Claude through `CLAUDE.md` and by `speak-on-stop`. |
 
 ## Exit codes
 

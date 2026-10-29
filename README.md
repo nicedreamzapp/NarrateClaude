@@ -295,22 +295,22 @@ No hotword. No "Hey Claude." Just talk. When you're done talking, stop. When the
 - 🔊 **A TTS voice** — your cloned voice if you have one, or macOS's built-in `say` command as a free starter
 - 🤖 **[Claude Code](https://github.com/anthropics/claude-code)** installed, so `claude` runs in Terminal
 - 🤖 **[claude-code-local](https://github.com/nicedreamzapp/claude-code-local)** — the local AI coding side of the setup. Optional but highly recommended. Without it, `claude` talks to Anthropic's servers, so the "zero internet" part only holds with a local model.
-- 📁 **Clone to `~/NarrateClaude`.** The launcher has that path hard-coded.
 
-### 🚀 Install in 3 commands
+### 🚀 Install in one line
 
 ```bash
-# 1. Clone this repo
-git clone https://github.com/nicedreamzapp/NarrateClaude.git ~/NarrateClaude
-cd ~/NarrateClaude
-
-# 2. Make everything runnable
-chmod +x dictation/bin/* narrative-claude.sh
-
-# 3. Start `claude` in Apple Terminal first, then compile the listener
-#    and bind it to that window (setup looks for a window running claude)
-./dictation/bin/dictation setup
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.sh | bash
 ```
+
+This clones to `~/NarrateClaude` (set `NARRATE_DIR` to change it), compiles the listener, links the one-click launcher as `narrate-claude` in `~/.local/bin` (`KIT_BIN_DIR`), creates the free starter `~/.local/bin/speak` below if you have no `speak` yet, and prints the optional Stop-hook snippet. It does not edit `~/.claude/settings.json`. `NARRATE_SKIP_BUILD=1` skips the compile.
+
+Uninstall (add `-s -- --purge` to also delete the clone and its state):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash
+```
+
+Manual install: [docs/install.md](docs/install.md).
 
 That's it. ✅
 
@@ -348,7 +348,6 @@ The first time you run the listener, macOS will ask for Microphone **and** Speec
 - **Very short commands get dropped.** Anything under 3 words is ignored unless it ends in `?` (so "yes" or "do it" won't go through).
 - **The voiceprint filter doesn't filter yet.** It needs an audio file per sentence and the v1 listener only emits text, so every line passes through.
 - **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190, but only if `~/.local/mlx-server/bin/python` exists (a Python with `mlx_lm` installed). If that isn't there or the model isn't downloaded, every line passes.
-- **`speak-on-stop` has my paths hard-coded** (`/Users/dtribe/...`). Edit `SPEAK` and `FLAG` at the top before using it as a Claude Code Stop hook.
 
 
 ### 🏃 Run It

@@ -18,12 +18,31 @@ These come from what the scripts actually call.
 | A microphone | Built-in is fine. |
 | English speech | The recognizer is created with `Locale(identifier: "en-US")`. |
 | A program at `~/.local/bin/speak` that plays audio with `afplay` | The listener pauses only while a process named `afplay` exists. |
-| The repo at `~/NarrateClaude` | `narrative-claude.sh` hard-codes `$HOME/NarrateClaude`. |
 
 Optional:
 
 - [claude-code-local](https://github.com/nicedreamzapp/claude-code-local), so `claude` talks to a model on your Mac instead of Anthropic's servers.
 - A Python at `~/.local/mlx-server/bin/python` with `mlx_lm` installed, for the relevance judge. See [Configuration](configuration.md#relevance-filter).
+
+## One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/install.sh | bash
+```
+
+It clones to `~/NarrateClaude` (`NARRATE_DIR`; `NARRATE_REPO` picks the source), runs `chmod +x`, creates the starter `~/.local/bin/speak` from step 2 only if you have no `speak` (marked so uninstall can tell it apart), links `narrative-claude.sh` as `narrate-claude` in `~/.local/bin` (`KIT_BIN_DIR`), and compiles the listener with the same `swiftc -O` command `dictation setup` uses (`NARRATE_SKIP_BUILD=1` skips it). Window binding is left to the launcher, so no `claude` window is needed. It prints the Stop-hook snippet but never edits `~/.claude/settings.json`. Then grant the permissions in step 4.
+
+Uninstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash
+# also delete the clone, including dictation/state:
+curl -fsSL https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall.sh | bash -s -- --purge
+```
+
+It runs `dictation stop` and removes the `narrate-claude` link, the installer's `speak` and the compiled listener.
+
+The steps below are the manual install. The repo can live anywhere: `narrative-claude.sh` finds its own folder, following symlinks, and falls back to `$NARRATE_DIR`, then `~/NarrateClaude`, when it was copied out of the repo.
 
 ## 1. Clone
 
@@ -85,7 +104,7 @@ ln -sf ~/NarrateClaude/narrative-claude.sh "$APP/Contents/MacOS/NarrativeClaude"
 
 Then add an `Info.plist` with `CFBundleExecutable` set to `NarrativeClaude`. The full plist is in the [README](https://github.com/nicedreamzapp/NarrateClaude#optional-wrap-it-in-a-app-bundle).
 
-## Uninstall
+## Uninstall (manual install)
 
 ```bash
 ~/NarrateClaude/dictation/bin/dictation uninstall
