@@ -58,8 +58,8 @@ def voice(tree, monkeypatch):
     ("[BLANK_AUDIO]", None),
     ("", None),
     ("   ", None),
-    ("okay", None),
-    ("yes please", None),
+    ("okay", "okay"),
+    ("Yes.", "Yes."),
     ("Why?", "Why?"),
     ("open the deploy logs", "open the deploy logs"),
     ("  run the tests again  ", "run the tests again"),
@@ -365,7 +365,7 @@ def test_player_command(voice):
 def test_typist_sends_text_then_enter_separately(voice):
     writes = []
     t = voice.session.Typist(writes.append, barge_in=False)
-    t.send("ok")  # gated: too short
+    t.send("(keyboard clicking)")  # gated: noise marker
     t.send("open the deploy logs\nplease")
     deadline = time.time() + 5
     while len(writes) < 2 and time.time() < deadline:
@@ -443,7 +443,7 @@ def test_session_pty_with_stub(tree, tmp_path):
     def send(text):
         return subprocess.run([sys.executable, str(tree / "voice" / "session.py"), "--send", text],
                               env=env, capture_output=True, text=True, timeout=20)
-    assert send("hi").returncode == 0          # accepted, then dropped by the gate
+    assert send("(coughing)").returncode == 0  # accepted, then dropped by the gate
     assert send("open the deploy logs").returncode == 0
     time.sleep(1.0)  # let the typist finish before the keyboard types
     # Keyboard input still passes through to the program.

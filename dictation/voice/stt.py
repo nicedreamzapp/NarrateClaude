@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""stt.py: local speech to text with whisper.cpp.
+"""stt.py: local speech to text with Parakeet (when installed) or whisper.cpp.
 
 Listens on the microphone, cuts the audio into utterances with a simple
 voice activity detector (an adaptive energy gate that decides when you
@@ -18,7 +18,7 @@ common.is_speaking) so the assistant never hears itself.
 Env:
   LISTEN_SILENCE_SEC   silence that ends an utterance (default 1.0)
   LISTEN_MAX_UTTER_SEC hard cap on one utterance (default 60)
-  LISTEN_MIN_SPEECH_SEC shorter bursts are ignored (default 0.35)
+  LISTEN_MIN_SPEECH_SEC shorter bursts are ignored (default 0.2)
   LISTEN_EMIT_WAV      1 = print "text<TAB>wav_path" (for the voiceprint filter)
   NARRATE_WHISPER_LANG spoken language (default en; "auto" to detect)
   NARRATE_WHISPER_THREADS  CPU threads for whisper (default: half the cores, 4-8)
@@ -80,7 +80,7 @@ class Endpointer:
         self.on_utterance = on_utterance
         self.silence_frames = int((silence_sec or _env_float("LISTEN_SILENCE_SEC", 1.0)) * RATE / FRAME)
         self.max_frames = int((max_sec or _env_float("LISTEN_MAX_UTTER_SEC", 60.0)) * RATE / FRAME)
-        self.min_speech_frames = int((min_speech_sec or _env_float("LISTEN_MIN_SPEECH_SEC", 0.35)) * RATE / FRAME)
+        self.min_speech_frames = int((min_speech_sec or _env_float("LISTEN_MIN_SPEECH_SEC", 0.2)) * RATE / FRAME)
         self.start_frames = start_frames
         self.preroll = int(preroll_sec * RATE / FRAME)
         self.min_level = min_level
@@ -311,6 +311,52 @@ class WhisperServer:
         return clean_text(data.get("text", ""))
 
 
+class ParakeetServer:
+    """NVIDIA Parakeet TDT 0.6B v3 (ONNX, int8) in-process via onnx-asr: ~7x faster than whisper here.
+
+    Used instead of whisper when the model folder exists (NARRATE_PARAKEET_MODEL, default
+    $NARRATE_DATA/models/parakeet-tdt-0.6b-v3-int8: encoder/decoder .onnx, nemo128.onnx, vocab.txt and
+    a config.json with "features_size": 128) and onnx-asr is installed. NARRATE_STT=whisper turns it off.
+    """
+
+    def __init__(self, model=None):
+        self.model = Path(model) if model else common.parakeet_model()
+        self.asr = None
+
+    @classmethod
+    def available(cls):
+        if os.environ.get("NARRATE_STT", "").lower() == "whisper" or not common.parakeet_model().is_dir():
+            return False
+        try:
+            import onnx_asr  # noqa: F401
+            return True
+        except ImportError:
+            return False
+
+    def start(self):
+        import onnx_asr
+        # CPU beats CoreML here (most of the graph falls back to CPU anyway, in many small partitions)
+        name = "nemo-" + self.model.name.removesuffix("-int8")  # nemo-parakeet-tdt-0.6b-v2 / -v3
+        if "parakeet-tdt" not in name:  # a custom NARRATE_PARAKEET_MODEL folder name
+            name = "nemo-parakeet-tdt-0.6b-v3"
+        self.asr = onnx_asr.load_model(name, str(self.model), quantization="int8",
+                                       providers=["CPUExecutionProvider"])
+        return self
+
+    def stop(self):
+        self.asr = None
+
+    def transcribe(self, wav_bytes: bytes, timeout=None) -> str:
+        import numpy as np
+        with wave.open(io.BytesIO(wav_bytes)) as w:
+            audio = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768
+        return clean_text(self.asr.recognize(audio, sample_rate=RATE))
+
+
+def make_server(model=None):
+    return ParakeetServer() if model is None and ParakeetServer.available() else WhisperServer(model=model)
+
+
 def _die_with_parent():
     # Linux sends this signal when the *thread* that started the server
     # exits, so start it from a thread that lives as long as the listener.
@@ -339,6 +385,9 @@ def clean_text(text: str) -> str:
     return "" if text.lower() in HALLUCINATIONS else text
 
 
+LIVE_FILE = common.STATE_DIR / "live.json"
+LIVE_EVERY_SEC = 0.4
+
 # --- the listener ------------------------------------------------------------------
 
 
@@ -347,7 +396,7 @@ class Listener:
 
     def __init__(self, on_text, server=None, emit_wav=False):
         self.on_text = on_text
-        self.server = server or WhisperServer()
+        self.server = server or make_server()
         self.emit_wav = emit_wav
         self.jobs = queue.Queue()
         self.stopping = threading.Event()
@@ -355,6 +404,8 @@ class Listener:
         self.speaking = False
         self._muted_until = 0.0
         self._worker = threading.Thread(target=self._transcribe_loop, daemon=True)
+        # Live transcript for the Claude Code band (only Parakeet is fast enough to re-run mid-utterance).
+        self.live = isinstance(self.server, ParakeetServer)
 
     def start(self):
         self.server.start()
@@ -366,9 +417,29 @@ class Listener:
         self.jobs.put(None)
         self.server.stop()
 
+    def _live(self, state, text):
+        if self.live:
+            try:
+                LIVE_FILE.write_text(json.dumps({"state": state, "text": text, "t": time.time()}), encoding="utf-8")
+            except OSError:
+                pass
+
     def _transcribe_loop(self):
         while True:
-            audio = self.jobs.get()
+            try:
+                audio = self.jobs.get(timeout=LIVE_EVERY_SEC if self.live else None)
+            except queue.Empty:
+                # Mid-utterance: re-transcribe what's been said so far and show it.
+                frames = list(self.endpointer.frames) if self.endpointer.in_speech else []
+                if frames:
+                    so_far = array("f")
+                    for f in frames:
+                        so_far.extend(f)
+                    try:
+                        self._live("live", self.server.transcribe(to_wav_bytes(so_far)))
+                    except Exception:
+                        pass
+                continue
             if audio is None:
                 return
             wav = to_wav_bytes(audio)
@@ -376,7 +447,9 @@ class Listener:
                 text = self.server.transcribe(wav)
             except Exception as e:
                 common.log(f"stt: transcription failed: {e}")
+                self._live("done", "")
                 continue
+            self._live("done", text)
             if not text:
                 continue
             path = ""
@@ -455,6 +528,9 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.check:
+        if args.model is None and ParakeetServer.available():
+            print(f"parakeet {ParakeetServer().model.name}")
+            return 0
         server = WhisperServer(model=args.model)
         missing = [str(p) for p in (server.binary, server.model) if not p.exists()]
         if missing:
@@ -469,7 +545,7 @@ def main(argv=None) -> int:
         sys.stdout.write(f"{text}\t{wav}\n" if wav else text + "\n")
         sys.stdout.flush()
 
-    listener = Listener(out, server=WhisperServer(model=args.model), emit_wav=emit_wav)
+    listener = Listener(out, server=make_server(args.model), emit_wav=emit_wav)
     try:
         listener.start()
     except Exception as e:

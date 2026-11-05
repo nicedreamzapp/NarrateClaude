@@ -133,6 +133,15 @@ def whisper_server_bin() -> Path:
     return d / "whisper.cpp" / "build" / "bin" / exe
 
 
+def parakeet_model() -> Path:
+    env = os.environ.get("NARRATE_PARAKEET_MODEL", "").strip()
+    if env:
+        return Path(env).expanduser()
+    # English-only v2 when installed (better on English), else multilingual v3.
+    en = models_dir() / "parakeet-tdt-0.6b-v2-int8"
+    return en if en.is_dir() else models_dir() / "parakeet-tdt-0.6b-v3-int8"
+
+
 def piper_voice() -> Path:
     env = os.environ.get("NARRATE_PIPER_VOICE", "").strip() or DEFAULT_PIPER_VOICE
     p = Path(env).expanduser()
@@ -149,8 +158,8 @@ _MARKER_RE = re.compile(r"^\s*[\(\[].*[\)\]]\s*$")
 def gate(text: str, force: bool = False) -> "str | None":
     """Return the text to send, or None to drop it.
 
-    Drops pure noise markers ("(keyboard clicking)", "[BLANK_AUDIO]") and
-    fragments under three words, unless the fragment ends in "?".
+    Drops pure noise markers ("(keyboard clicking)", "[BLANK_AUDIO]").
+    Short replies ("Yes.", "Okay.") go through: they're real answers.
     """
     text = (text or "").strip()
     if not text:
@@ -158,8 +167,6 @@ def gate(text: str, force: bool = False) -> "str | None":
     if force:
         return text
     if _MARKER_RE.match(text):
-        return None
-    if len(text.split()) < 3 and not text.endswith("?"):
         return None
     return text
 
