@@ -43,13 +43,13 @@ Apple's speech engine is still there as `narrate-claude --apple`.
 
 ## Screenshots and demo
 
-There is no screenshot, GIF or demo video in the repo yet. The best record of how it behaves is the engineering log [`BARGE_IN_ATTEMPTS.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/BARGE_IN_ATTEMPTS.md), which covers seven echo-cancellation attempts for the unpublished 2.0 work, with what failed and the measured results (for example 58 dB offline echo reduction for WebRTC AEC3 against 29.5 dB for SpeexDSP).
+There is no screenshot, GIF or demo video in the repo yet. The best record of how it behaves is the engineering log [`BARGE_IN_ATTEMPTS.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/BARGE_IN_ATTEMPTS.md), which covers eight echo-cancellation attempts, with what failed and the measured results (for example 58 dB offline echo reduction for WebRTC AEC3 against 29.5 dB for SpeexDSP, and the live trials behind 2.0's [barge-in](barge-in.md)).
 
 ## Known limits
 
 - The default macOS mode is Apple Terminal only; `narrate-claude --here` works in any terminal ([issue #2](https://github.com/nicedreamzapp/NarrateClaude/issues/2)).
-- No barge-in by voice. Anything you say while a reply is playing is dropped.
-- Lines under 3 words are dropped unless they end in `?`.
+- Barge-in (talk over the voice to stop it) is opt-in with `NARRATE_BARGE_IN=2`, macOS only, and only for voices played as a WAV through `afplay`, not Chatterbox. Without it, anything you say while a reply is playing is dropped. See [Barge-in](barge-in.md).
+- Lines under 3 words are dropped unless they end in `?` or are a common short reply like "yes" or "stop".
 - English by default (`NARRATE_WHISPER_LANG` changes it with the multilingual model).
 
 Details are on the [Troubleshooting](troubleshooting.md) and [FAQ](faq.md) pages.

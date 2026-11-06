@@ -24,11 +24,11 @@
 
 **NarrateClaude is a hands-free voice loop for Claude Code on macOS, Linux and Windows: it transcribes your speech on your own machine with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), types it into the `claude` session, and speaks the replies with the local [Piper](https://github.com/OHF-Voice/piper1-gpl) voice, or whatever voice you plug into `~/.local/bin/speak`. Everything is open source and runs offline.**
 
-**Proof:** there is no demo video or screenshot in the repo yet. What is here is the working v1 code (listed below) and an engineering log, [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), that records seven echo-cancellation attempts with what failed, why, and the measured results (for example 58 dB offline echo reduction for WebRTC AEC3 vs 29.5 dB for Speex).
+**Proof:** there is no demo video or screenshot in the repo yet. What is here is the working code (listed below), a test suite that runs on all three OSes in CI, and an engineering log, [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), that records eight echo-cancellation attempts with what failed, why, and the measured results (for example 58 dB offline echo reduction for WebRTC AEC3 vs 29.5 dB for Speex, and the live barge-in trials behind 2.0).
 
 | Part | File |
 |---|---|
-| 🎧 Listener: mic → voice activity detection → a whisper.cpp server it keeps loaded (f16 model, Silero VAD inside). Pauses while the computer is talking | [`dictation/voice/stt.py`](dictation/voice/stt.py) |
+| 🎧 Listener: mic → voice activity detection → a whisper.cpp server it keeps loaded (f16 model, Silero VAD inside). Pauses while the computer is talking, unless barge-in is on | [`dictation/voice/stt.py`](dictation/voice/stt.py) |
 | 🖥️ Session: runs `claude` in a pty the loop owns (ConPTY on Windows) and types each sentence into it. Works in any terminal | [`dictation/voice/session.py`](dictation/voice/session.py) |
 | 🔊 Default voice: Piper TTS, used when you have no `speak` of your own | [`dictation/voice/speak.py`](dictation/voice/speak.py) |
 | 🍎 Optional Apple-speech listener for `--apple` (the original v1 listener) | [`dictation/src/Listen.swift`](dictation/src/Listen.swift) |
@@ -40,6 +40,7 @@
 | 👤 Voiceprint filter and enrollment script (Terminal.app mode, see Known limits) | [`dictation/filter/filter.py`](dictation/filter/filter.py), [`enroll.py`](dictation/filter/enroll.py) |
 | 🔊 Claude Code Stop hook that reads the last reply aloud | [`dictation/bin/speak-on-stop`](dictation/bin/speak-on-stop) |
 | 🎭 The always-narrate persona | [`CLAUDE.md`](CLAUDE.md) |
+| 🗣️ Barge-in (2.0, macOS, opt-in): WebRTC AEC3 echo canceller plus a gate that learns the room, so you can talk over the voice to stop it | [`dictation/voice/bargein.py`](dictation/voice/bargein.py) |
 | 📐 Research and experiment logs for the 2.0 barge-in work | [`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md), [`EXPERIMENT_PLAN.md`](EXPERIMENT_PLAN.md), [`RESEARCH_2026_05_21.md`](RESEARCH_2026_05_21.md) |
 
 **Upstream, not mine:** [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and OpenAI's Whisper weights, [Silero VAD](https://github.com/snakers4/silero-vad), [Piper](https://github.com/OHF-Voice/piper1-gpl) and its lessac voice, [PortAudio](https://www.portaudio.com/) via [python-sounddevice](https://github.com/spatialaudio/python-sounddevice), [pywinpty](https://github.com/andfoy/pywinpty), Apple's Speech framework (`SFSpeechRecognizer`, only for `--apple`), [Claude Code](https://github.com/anthropics/claude-code) by Anthropic, [Resemblyzer](https://github.com/resemble-ai/Resemblyzer) for voiceprints, [MLX](https://github.com/ml-explore/mlx) running Meta's Llama-3.2-3B as the relevance judge, and [Pocket TTS](https://github.com/kyutai-labs/pocket-tts) by Kyutai for my cloned voice. Full list in [`CREDITS.md`](CREDITS.md).
@@ -104,8 +105,8 @@ It's Siri, if Siri was actually private, actually smart, and actually sounded li
 
 
 <a id="why"></a>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s03-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s03-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s03-banner.svg" width="100%" alt="03. Why I built this. Ambient computing starts here, and what 2.0 brings"></picture>
-<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s03-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s03-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s03-r1.svg" width="100%" alt="Ambient computing. The computer is around you, not in front of you. Work while playing. The keyboard is optional. Coming in 2.0. Talking Stick mode: interrupt it mid-sentence."></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/v2.0.0/assets/readme/s03-banner-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/v2.0.0/assets/readme/s03-banner-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/v2.0.0/assets/readme/s03-banner.svg" width="100%" alt="03. Why I built this. Ambient computing starts here, and what is new in 2.0"></picture>
+<picture><source media="(max-width: 610px), (min-width: 768px) and (max-width: 895px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/v2.0.0/assets/readme/s03-r1-m.svg"><source media="(max-width: 1149px)" srcset="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/v2.0.0/assets/readme/s03-r1-mid.svg"><img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/v2.0.0/assets/readme/s03-r1.svg" width="100%" alt="Ambient computing. The computer is around you, not in front of you. Work while playing. The keyboard is optional. New in 2.0. Talking Stick mode: interrupt it mid-sentence."></picture>
 
 > 💭 **I'm tired of being hunched over a screen with a mouse in my hand.**
 
@@ -133,52 +134,55 @@ You don't sit down at a workstation and stop living. You **go about your life**,
 
 ### 🌱 This is the first step
 
-NarrateClaude 1.0 is just the first tooth on the gear. It gets an on-device speech engine talking to a local LLM on your machine in a loop that stays **100% private**. It proves a voice-first interface to a real coding environment isn't just possible — it's *usable*. (I'm using it right now, as I write this, without touching a keyboard for long stretches.)
+NarrateClaude is still just the first tooth on the gear. It gets an on-device speech engine talking to a local LLM on your machine in a loop that stays **100% private**. It proves a voice-first interface to a real coding environment isn't just possible — it's *usable*. (I'm using it right now, as I write this, without touching a keyboard for long stretches.)
 
 But the north star is bigger than one mode on one Mac. It's a full ambient-computing stack where **screens are optional, typing is optional, sitting in one place is optional** — and the only thing that isn't optional is that **your data and your voice never leave your house**. 🔒
 
 That's the bet. **Want to build it with me?** 🤝
 
 
-### 🪄 Coming in 2.0 — "Talking Stick" Mode
+### 🪄 New in 2.0: "Talking Stick" mode
 
-> 🗣️ **A real full-duplex voice agent that you can interrupt mid-sentence the way you'd interrupt a person.**
+> 🗣️ **Talk over it to stop it.** Start talking while your Mac is mid-reply and the voice stops, it hears what you said, and that goes to Claude as your next line.
 
-NarrateClaude 1.0 is half-duplex — you talk, then it talks, then you talk. Polite, but it doesn't feel like a conversation. **Talking Stick mode is the next gear.** Start talking while your Mac is mid-reply and it'll stop talking, listen, and pivot — same as a human would when you cut them off.
+Up to 1.0 NarrateClaude was half-duplex. You talk, then it talks, then you talk, and anything you said while it was talking got dropped. In 2.0 the mic stays open while the voice plays. WebRTC's AEC3 echo canceller (from the `livekit` wheel) subtracts the exact WAV that `afplay` is playing from the mic, and a gate that learns your room decides when what is left is you talking. When it fires, the voice stops, the last 1.5 s of cleaned audio goes to the endpointer so your first words survive, and the session sends Escape plus your sentence. The code is [`dictation/voice/bargein.py`](dictation/voice/bargein.py).
 
-### 🥷 Why nobody else has shipped this for a personal user
+**Turn it on (macOS):**
 
-Big AI companies optimize barge-in for **everyone on Earth**. We're optimizing it for **one human at a time**. That asymmetry is the entire research opening.
+```bash
+# once: add the echo canceller to the installer's venv (a prebuilt wheel, nothing to compile)
+~/.local/share/narrateclaude/venv/bin/pip install -r ~/NarrateClaude/dictation/voice/requirements-bargein.txt
+NARRATE_BARGE_IN=2 narrate-claude
+```
 
-Two structural advantages no public voice agent has:
+It is off by default. With it off, the listener behaves exactly like it did before. If the echo canceller can't load, or what is playing isn't a WAV it can read, it falls back to the old behavior and stays deaf while the voice talks. It never feeds uncancelled playback to speech to text.
 
-1. 🎯 **We know the exact TTS signal we just played.** Piper generates the WAV before it hits the speaker — we have the reference signal byte-for-byte, not an estimate. That's the unlock for real acoustic echo cancellation at the hardware abstraction layer.
-2. 👤 **Your voiceprint is pre-enrolled.** A speaker embedding for your voice already lives on disk. The VAD can be conditioned on **you specifically** — so it fires when *you* speak and ignores everything else: the assistant's own playback bleeding through the mic, the dog, the kid in the next room, the TV playing a podcast in the background.
+**What I measured** (M5 MacBook Pro, built-in speakers and mic, empty office, my cloned voice talking over Kokoro replies):
 
-The big players can't ship either of these things, because they don't know who you are in advance. We do.
+- Echo alone: 0 false barge-ins, on 20 s of silence plus 3 full replies (about 50 s), and 0 in the synthetic tests.
+- Live double-talk: 9 of 10 trials stopped the voice, 0.16 to 0.39 s after I started talking (one took 1.09 s). The miss and the slow one were both a quiet "no, the other one". No assistant words showed up in any transcript.
+- Replaying those room recordings as one session: 11 of 12 hits, median 0.14 s, and the same 11 of 12 with the mic 20 dB quieter.
 
-### 🧠 The 128 GB Apple Silicon edge
+**Limits right now:**
 
-This work is being prototyped on an **M5 Max with 128 GB unified memory**. Most indie AI researchers don't have the hardware to fine-tune a full-duplex audio model on personal voice data — they're stuck consuming whatever the big labs release. With 128 GB unified memory and the Neural Engine, **fine-tuning a 7B+ audio model on your own voice + your own TTS is actually feasible on one machine.** That's the unfair advantage on the moonshot phase.
+- macOS only, and only voices that play a WAV through `afplay` (the built-in Piper voice, Kokoro). Chatterbox streams through ffplay, so it stays half-duplex for now.
+- Talking over the first ~0.3 s of a reply can pick up the voice's opening words.
+- Talking right as a new reply starts can send an empty clip to whisper.
+- Speech still going when the 15 s barge-in window ends is dropped.
+- A loud fan or HVAC hum can push the trigger level too high.
 
-### 🔧 What's being built right now
-
-- 🎚️ **Apple VPIO at the HAL** — `setVoiceProcessingEnabled(true)` on the same `AVAudioEngine` that owns the mic, with Piper TTS routed through an `AVAudioPlayerNode` on that same engine. That's the configuration Apple's own echo canceller actually needs to work — the reference signal has to be in-band, not out on `afplay`.
-- 👂 **FluidAudio Silero VAD on the Apple Neural Engine** — sub-100ms speech-onset detection pinned to the ANE so it's basically free. When it fires while TTS is playing, the player node dies and the assistant shuts up immediately.
-- 🧬 **Personal VAD head conditioned on your voiceprint** — HyWA-style hypernetwork that generates a personalized weight set from your pre-enrolled speaker embedding. The publishable contribution. Anything that isn't *your* voice never fires the barge-in.
-- 🎬 **Smart Turn v3 for end-of-turn prediction** — replaces the 2.5-second "stopped changing" heuristic with a learned classifier that knows the difference between "I'm thinking mid-sentence" and "I'm done, your turn."
-- 🚀 **Phase 5 moonshot — joint full-duplex fine-tune** — fine-tune Moshi or SALMONN-omni on a corpus of `(your_voice, piper_tts)` pairs and swallow the whole AEC/VAD/EOT pipeline into one end-to-end audio model. The 128 GB Apple Silicon angle is load-bearing here.
+Tuning knobs (`NARRATE_BARGE_FLOOR_DB`, `NARRATE_BARGE_MARGIN_DB`, `NARRATE_BARGE_FRAMES`, `NARRATE_BARGE_HOLDOFF_MS`, `NARRATE_BARGE_DEBUG=1`) are documented at the top of `bargein.py`; barge-ins are logged to `dictation/state/bargein.log`. The pull request with the full test write-up is [#14](https://github.com/nicedreamzapp/NarrateClaude/pull/14).
 
 ### 📜 The receipts
 
-This isn't a "wouldn't it be cool if…" pitch. It has seven logged attempts so far, each with what worked, what didn't, and why:
+It took eight logged attempts to get here, each with what worked, what didn't, and why:
 
-- 📐 **[`EXPERIMENT_PLAN.md`](EXPERIMENT_PLAN.md)** — the technical north star. Architecture diagram, phases, success metrics for each phase, demo talking points.
-- 🧪 **[`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md)** — every barge-in attempt to date with what worked, what didn't, and *why*. So future-you (or future-contributor) doesn't waste a weekend on a known dead end.
+- 📐 **[`EXPERIMENT_PLAN.md`](EXPERIMENT_PLAN.md)**: the original plan. Architecture diagram, phases, success metrics for each phase.
+- 🧪 **[`BARGE_IN_ATTEMPTS.md`](BARGE_IN_ATTEMPTS.md)**: every barge-in attempt with what worked, what didn't, and *why*. Apple's voice processing I/O did not hold up (attempts 1 and 5). WebRTC AEC3 with a gate worked live in a separate Swift build (attempt 7), and attempt 8 is what shipped in 2.0: the same echo canceller in the Python voice loop, with a gate that learns each room.
 
-Status, per the log: Apple VPIO did not hold up (attempts 1 and 5). The setup that worked live is WebRTC AEC3 plus a Silero energy gate (attempt 7). The personal VAD head loads but misfired in live use, so it is switched off until it is retrained.
+### 🔭 What's next
 
-The v2 code lives in a local `dictation-v2/` Swift Package that is **not published in this repo** (it is in `.gitignore`). Everything you can run from this repo is v1.
+The things I still want to try on top of this: a voice activity detector conditioned on your enrolled voiceprint so only *you* can interrupt it (the first version misfired live and is switched off until it's retrained), a learned end-of-turn model to replace the silence timer, barge-in for streamed voices like Chatterbox, and the long shot, a full-duplex audio model fine-tuned on your voice and your own TTS. The 128 GB of unified memory on the M5 Max this is built on is what makes that last one possible on one machine.
 
 <img src="https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/199733aa09966e26fff5afdd4e0a3b035d56d144/assets/readme/s03-rule.svg" width="100%" alt="">
 
@@ -346,11 +350,11 @@ irm https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall
 
 The first time you run it, your OS asks for Microphone access for your terminal app. **Approve it.** (`--apple` on a Mac also asks for Speech Recognition.)
 
-### ⚠️ Known limits (v1, what's in this repo)
+### ⚠️ Known limits (2.0)
 
 - **Two ways to run on macOS.** The default opens Apple Terminal (AppleScript typing, as in v1). `narrate-claude --here` works in any terminal app, and is how it runs on Linux and Windows.
-- **No barge-in.** The mic is muted while `afplay` plays, so anything you say during a reply is dropped. The 2.0 work that fixes this is not published here.
-- **Very short commands get dropped.** Anything under 3 words is ignored unless it ends in `?` (so "yes" or "do it" won't go through).
+- **Barge-in is opt-in and macOS only.** Without `NARRATE_BARGE_IN=2` the mic is muted while the voice plays, so anything you say during a reply is dropped. With it on, it only works for voices that play a WAV through `afplay` (Piper, Kokoro), not Chatterbox, and it has the edge cases listed under [New in 2.0](#-new-in-20-talking-stick-mode).
+- **Very short commands get dropped.** Anything under 3 words is ignored unless it ends in `?` or is a common short reply ("yes", "no", "okay", "stop", "do it", "go ahead" and a few more), so other one or two word lines won't go through.
 - **The voiceprint filter is Terminal-mode only.** Once you enroll a voiceprint, the whisper listener hands it each sentence's audio in Terminal.app mode; `--here` sessions don't run it yet.
 - **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190, but only if `~/.local/mlx-server/bin/python` exists (a Python with `mlx_lm` installed). If that isn't there or the model isn't downloaded, every line passes.
 
@@ -467,7 +471,7 @@ Environment variables for when you want to fiddle:
 | `NARRATE_WHISPER_LANG` | `en` | Spoken language (`auto` to detect; use a multilingual model) |
 | `LISTEN_SILENCE_SEC` | 1.0 | Silence that ends a sentence |
 | `LISTEN_MAX_UTTER_SEC` | 60 | Hard cap on a single utterance (seconds) |
-| `NARRATE_BARGE_IN` | `1` | A new sentence stops the voice and sends Escape first |
+| `NARRATE_BARGE_IN` | `1` | `1`: a new sentence stops the voice and sends Escape first. `2` (macOS): also keep listening while the voice talks, so talking over it stops it |
 | `NARRATE_STT` | `whisper` | `apple` for the Swift listener in Terminal mode |
 | `LISTEN_STABILITY_SEC` | 2.5 | `--apple` only: how long the text must stop changing |
 | `LISTEN_MAX_SESSION_SEC` | 300 | `--apple` only: clean respawn every N seconds |
@@ -517,7 +521,7 @@ If the numbers stay at zero, macOS isn't letting the process access the mic — 
 PRs and issues super welcome, especially if you want to:
 
 - 🔊 **Add a TTS recipe** — Piper, local ElevenLabs, MLX-TTS, Kyutai Moshi, or any other offline voice synthesizer that slots into `~/.local/bin/speak`
-- 🗣️ **Interruption detection** — let me cut off the TTS mid-sentence if I start talking again (barge-in)
+- 🗣️ **Barge-in for more voices and OSes**: 2.0 handles WAVs played through `afplay` on macOS; streamed voices like Chatterbox, Linux and Windows are open
 - 🐛 **Just tell me what's broken** — open an issue with the contents of `dictation/state/dictation.log` attached
 
 Small PRs welcome. Huge PRs welcome. Ideas-with-no-code welcome.

@@ -1,11 +1,16 @@
 ---
 title: Changelog
-description: NarrateClaude change history built from the git log, from the first public release in April 2026 to the latest README fixes.
+description: NarrateClaude change history built from the git log, from the first public release in April 2026 to v2.0.0 in November 2026.
 ---
 
 # Changelog
 
-There are no tagged releases. This list is built from the git history of `main`, newest first. Dates are commit dates.
+Tagged releases are on the [releases page](https://github.com/nicedreamzapp/NarrateClaude/releases): v1.0.0 (2026-08-06) and v2.0.0 (2026-11-06). This list is built from the git history of `main`, newest first. Dates are commit dates.
+
+## 2026-11-06: v2.0.0
+
+- Barge-in on macOS: with `NARRATE_BARGE_IN=2` the mic stays open while the voice plays, WebRTC AEC3 cancels the playback, and talking over it stops the voice. 0 false triggers on echo alone, 9 of 10 live double-talk trials stopped the voice in 0.16 to 0.39 s. See [Barge-in](barge-in.md). ([#14](https://github.com/nicedreamzapp/NarrateClaude/pull/14))
+- Parakeet live transcript, smoother Chatterbox narration, podcast SSML and shorthand, and short replies like "yes" go through, by [@hershykoh](https://github.com/hershykoh). ([#13](https://github.com/nicedreamzapp/NarrateClaude/pull/13))
 
 ## 2026-10-29
 

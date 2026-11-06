@@ -18,6 +18,7 @@ NarrateClaude's own code is the listener, the shell scripts and the filters list
 | [mlx-lm](https://github.com/ml-explore/mlx-lm) | `mlx_lm server`, the local OpenAI-style endpoint the judge calls | Apple's ml-explore team |
 | [Llama 3.2 3B Instruct](https://huggingface.co/mlx-community/Llama-3.2-3B-Instruct-4bit) (4-bit MLX conversion) | Default relevance judge model | Meta, converted by mlx-community |
 | [Resemblyzer](https://github.com/resemble-ai/Resemblyzer) and NumPy | Voiceprint enrollment and matching | Resemble AI, NumPy developers |
+| [WebRTC](https://webrtc.org/) audio processing (AEC3), via the [livekit](https://github.com/livekit/python-sdks) Python wheel | The echo canceller behind barge-in (`bargein.py`) | The WebRTC project, LiveKit |
 
 ## Used alongside it
 
@@ -28,7 +29,7 @@ NarrateClaude's own code is the listener, the shell scripts and the filters list
 
 ## Named in the 2.0 research logs
 
-Not used by the published code: WebRTC audio processing (AEC3, via the PulseAudio `webrtc-audio-processing` fork), SpeexDSP, [FluidAudio](https://github.com/FluidInference/FluidAudio), Silero VAD, Smart Turn v3 from Pipecat, and WhisperKit.
+Tried in the logs but not used by the published code: the PulseAudio `webrtc-audio-processing` fork (2.0 uses WebRTC AEC3 from the livekit wheel instead), SpeexDSP, [FluidAudio](https://github.com/FluidInference/FluidAudio), Silero VAD, Smart Turn v3 from Pipecat, and WhisperKit.
 
 ## This site
 
