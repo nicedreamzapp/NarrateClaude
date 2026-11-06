@@ -381,3 +381,11 @@ words in any transcript. The miss and the late one were the quiet "no, the other
 Also: whisper phantom filter (verbose_json no_speech_prob + lone-filler-on-a-blip rule,
 the mini's repeated "Okay."), and the endpointer's absolute floor lowered 0.006 -> 0.0015
 so quiet mics are heard without leaning in.
+Review round (same night): with barge-in off the listener is byte-for-byte the old one
+(0.006 floor, plain json, no transcript dropped). In barge-in mode the phantom filter
+only drops when whisper's no-speech probability is >= 0.6 AND the audio is at the room
+floor, never a yes/no. Coupling is learned from the first 30 frames that carry playback,
+ERLE only where there is echo to remove (held through pauses, carried to the next
+reply), and nothing is learned from frames near the person talking. Replaying tonight's
+room recordings as one session: 0 false barge-ins, 11/12 hits (median 0.14 s); at 20 dB
+quieter mic gain: 0 false, 11/12.

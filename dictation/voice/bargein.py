@@ -172,7 +172,11 @@ class Detector:
     NOISE_START_MAX = -45.0
     LEAK_MAX_UNDER_COUPLING = 4.0
     MIN_ERLE = 10.0         # dB the canceller must be removing before a barge-in may fire
-    LEARN_FRAMES = 50       # coupling is measured over the first ~1.5 s of each reply
+    COUPLING_FRAMES = 30    # coupling: measured over the first 30 frames of each reply that
+                            # carry real playback (not frame numbers: replies start with silence)
+    REF_ACTIVE_DB = -40.0   # a playback frame this loud counts as "carrying echo"
+    NOISE_RISE_MAX = 0.05   # dB per frame: estimates may only creep up
+    LEAK_RISE_MAX = 1.0
 
     def __init__(self, floor_db=None, margin_db=None, needed=None, window=10, holdoff_ms=None):
         self.floor_db = _env("NARRATE_BARGE_FLOOR_DB", -65) if floor_db is None else floor_db
@@ -189,6 +193,7 @@ class Detector:
         self.noise_db = None
         self.coupling_db = None   # raw mic level vs playback level (speaker->mic loudness)
         self.leak_db = None       # cancelled level vs playback level, worst case
+        self.erle_db = None       # dB the canceller removes; carried across replies (see feed)
         self.new_reply()
 
     def new_reply(self):
@@ -198,7 +203,7 @@ class Detector:
         self.refs = collections.deque(maxlen=20)   # ~0.6 s: covers the speaker->mic delay
         self.frames = 0
         self._coupling = []
-        self.erle_db = None     # per reply: a fresh canceller has to prove itself again
+        self._coupling_done = False
         if getattr(self, "leak_db", None) is not None and self.coupling_db is not None:
             # Let old bursts fade a little each reply, never under the prior.
             self.leak_db = max(self.coupling_db - self.LEAK_UNDER_COUPLING, self.leak_db - 2.0)
@@ -211,8 +216,8 @@ class Detector:
                 self.noise_db = level_db
         elif level_db < self.noise_db:
             self.noise_db += 0.3 * (level_db - self.noise_db)
-        else:
-            self.noise_db += 0.002 * (level_db - self.noise_db)
+        elif level_db < self.noise_db + self.NOISE_MARGIN:   # someone talking is not the room
+            self.noise_db += min(self.NOISE_RISE_MAX, 0.002 * (level_db - self.noise_db))
 
     def threshold_db(self, ref_env=None) -> float:
         if ref_env is None:
@@ -230,49 +235,59 @@ class Detector:
         self.refs.append(ref_db)
         ref_env = max(self.refs)
         playing = ref_env > -60
-        loud_ref = ref_env > -40 and raw_db is not None
-        if loud_ref and self.frames <= self.LEARN_FRAMES and (warm or level_db <= self.threshold_db(ref_env)):
-            self._coupling.append(raw_db - ref_env)
-            if self.frames == self.holdoff or self.frames == self.LEARN_FRAMES:
-                self._learn_coupling()
-        if not playing or warm:
-            self.observe_quiet(level_db)
         loud = level_db > self.threshold_db(ref_env)
-        if not loud or warm:
+        # Frames near someone talking (loud now or in the last 10) teach nothing.
+        active = loud or any(self.recent)
+        # Coupling: the first COUPLING_FRAMES frames of this reply that carry playback.
+        if ref_db > self.REF_ACTIVE_DB and raw_db is not None and not active and not self._coupling_done:
+            self._coupling.append(raw_db - ref_env)
+            if len(self._coupling) in (8, self.COUPLING_FRAMES):
+                self._learn_coupling(final=len(self._coupling) == self.COUPLING_FRAMES)
+        if (not playing or warm) and not active:
+            self.observe_quiet(level_db)
+        if not active or warm:
             # Leftover echo: rise quickly, fall slowly.
             a = 0.3 if level_db > self.echo_db else 0.05
             self.echo_db = self.echo_db * (1 - a) + level_db * a
-            if loud_ref:
-                # How much the canceller takes off (slow average, quiet frames only).
+        if not active and not warm:
+            # ERLE only where there IS echo to remove: the current playback frame is loud
+            # and the mic is above the room. Gaps between sentences don't touch it, so the
+            # last good value is held right where people tend to interrupt.
+            if ref_db > self.REF_ACTIVE_DB and raw_db is not None and \
+                    (self.noise_db is None or raw_db > self.noise_db + 6):
                 e = raw_db - level_db
                 self.erle_db = e if self.erle_db is None else self.erle_db + 0.05 * (e - self.erle_db)
-            if playing and self.leak_db is not None and not warm and self.cancelling():
-                # Echo leak relative to what was played: an upper envelope, bounded.
+            if playing and self.leak_db is not None and self.cancelling():
+                # Echo leak relative to what was played: an upper envelope, rate-limited, bounded.
                 rel = level_db - ref_env
                 if rel > self.leak_db:
-                    self.leak_db += 0.3 * (rel - self.leak_db)
+                    self.leak_db += min(self.LEAK_RISE_MAX, 0.3 * (rel - self.leak_db))
                 self.leak_db = min(self.leak_db, self.coupling_db - self.LEAK_MAX_UNDER_COUPLING)
-            if warm:
-                # Warm-up hears everything, the person included: never let it push the
-                # echo estimate above the room's noise + margin.
-                cap = (self.noise_db + self.NOISE_MARGIN) if self.noise_db is not None else self.floor_db
-                self.echo_db = min(self.echo_db, max(cap, self.floor_db))
         if warm:
+            # Warm-up hears everything, the person included: never let it push the
+            # echo estimate above the room's noise + margin.
+            cap = (self.noise_db + self.NOISE_MARGIN) if self.noise_db is not None else self.floor_db
+            self.echo_db = min(self.echo_db, max(cap, self.floor_db))
             return False
         self.recent.append(loud)
         # Fail safe: if the canceller isn't taking the echo off, what is "loud" is
-        # probably our own voice. Never fire then.
+        # probably our own voice. Never fire then. (No estimate yet = first reply's
+        # first moments: the leak and echo gates carry it.)
         return sum(self.recent) >= self.needed and self.cancelling()
 
     def cancelling(self) -> bool:
         return self.erle_db is None or self.erle_db >= self.MIN_ERLE
 
-    def _learn_coupling(self):
-        """Speaker->mic loudness for this reply: a high percentile of raw - played."""
-        if len(self._coupling) < 5:
-            return
+    def _learn_coupling(self, final):
+        """Speaker->mic loudness for this reply: a high percentile of raw - played, smoothed
+        across replies. Provisional after 8 frames, settled once per reply after 30."""
         c = sorted(self._coupling)[int(0.9 * (len(self._coupling) - 1))]
-        self.coupling_db = c if self.coupling_db is None else 0.7 * self.coupling_db + 0.3 * c
+        if self.coupling_db is None:
+            self.coupling_db = c
+        elif final:
+            self.coupling_db = 0.7 * self.coupling_db + 0.3 * c
+        if final:
+            self._coupling_done = True
         prior = self.coupling_db - self.LEAK_UNDER_COUPLING
         self.leak_db = prior if self.leak_db is None else max(prior, self.leak_db)
 
@@ -303,7 +318,8 @@ class BargeIn:
         return clean, self.det.feed(self.last_level, _db(_rms(ref)) if len(ref) else -120.0, _db(_rms(mic)))
 
     def idle(self, frame):
-        """A mic frame while nothing plays: keeps the room-noise estimate current."""
+        """A mic frame while nothing plays: keeps the room-noise estimate current
+        (observe_quiet ignores frames well above the room, i.e. someone talking)."""
         self.det.observe_quiet(_db(_rms(frame)))
 
     def take_preroll(self):

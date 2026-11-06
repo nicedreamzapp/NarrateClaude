@@ -372,28 +372,104 @@ def _tone(sec, level, rate=RATE):
     return (np.sin(2 * np.pi * 180 * t) * level * math.sqrt(2)).astype(np.float32)
 
 
-def test_phantom_okay_is_dropped_on_a_blip_but_not_when_said():
+def test_phantom_filter_is_conservative():
     room = np.random.default_rng(5).normal(0, 0.001, int(1.2 * RATE)).astype(np.float32)
     blip = room.copy()
     blip[8000:8000 + 1600] += _tone(0.1, 0.05)
-    said = room.copy()
-    said[4000:4000 + 8000] += _tone(0.5, 0.05)
-    assert stt.is_phantom("Okay.", blip.tolist())
-    assert not stt.is_phantom("Okay.", said.tolist())
-    assert stt.is_phantom("Okay.", said.tolist(), no_speech=0.3)          # whisper doubts it
-    assert stt.is_phantom("Turn left at the light.", blip.tolist(), no_speech=0.9)
-    assert not stt.is_phantom("Turn left at the light.", said.tolist(), no_speech=0.9)  # clearly said
-    assert not stt.is_phantom("Turn left at the light.", blip.tolist(), no_speech=0.1)
-    assert not stt.is_phantom("Yes.", blip.tolist())                      # answers are never fillers
+    crisp = room.copy()
+    crisp[4000:4000 + 8000] += _tone(0.5, 0.05)
+    # Whisper sure nothing was said + audio at the room floor: dropped.
+    assert stt.is_phantom("Okay.", room.tolist(), no_speech=0.9)
+    assert stt.is_phantom("Okay, okay.", blip.tolist(), no_speech=0.7)
+    # A crisp "Okay." survives even when whisper doubts it; so does anything without a doubt.
+    assert not stt.is_phantom("Okay.", crisp.tolist(), no_speech=0.9)
+    assert not stt.is_phantom("Okay.", blip.tolist(), no_speech=0.3)
+    assert not stt.is_phantom("Okay.", blip.tolist(), no_speech=None)     # Parakeet: no score
+    # Yes/no answers are never dropped, punctuation or not.
+    for text in ("Yes.", "No!", "yes, yes", "Yeah."):
+        assert not stt.is_phantom(text, room.tolist(), no_speech=0.99)
+
+
+def test_default_path_is_unchanged(monkeypatch):
+    """Barge-in off: the old 0.006 floor, plain json from whisper, no transcript ever dropped."""
+    assert stt.Endpointer(lambda a: None).min_level == 0.006
+    server = stt.WhisperServer(model=Path("m.bin"), binary=Path("ws"), port=1)
+    assert not getattr(server, "verbose", False)
+    got = []
+
+    class Server:
+        last_no_speech = 0.99
+        def transcribe(self, wav):
+            return "Okay."
+    listener = stt.Listener(lambda text, wav: got.append(text), server=Server())
+    listener.barge_in = None
+    listener.jobs.put(stt.array("f", bytes(4 * RATE)))
+    listener.jobs.put(None)
+    listener._transcribe_loop()
+    assert got == ["Okay."]
 
 
 def test_quiet_mic_speech_still_starts_an_utterance():
     """The mini's fifine: room at -70 dBFS, speech around -42. The old 0.006 floor missed it."""
     got = []
-    ep = stt.Endpointer(got.append, silence_sec=0.5, min_speech_sec=0.2)
+    ep = stt.Endpointer(got.append, silence_sec=0.5, min_speech_sec=0.2, min_level=0.0015)  # barge-in mode
     room = np.random.default_rng(6).normal(0, 0.0003, 3 * RATE).astype(np.float32)
     room[RATE:RATE + 16000] += _tone(1.0, 0.008)
     for k in range(0, len(room) - FRAME + 1, FRAME):
         ep.feed(stt.array("f", room[k:k + FRAME].tobytes()))
     ep.flush()
     assert len(got) == 1
+
+
+def test_per_reply_cancellers_are_released():
+    import gc
+    import resource
+    import weakref
+    b = bargein.BargeIn()
+    frame = np.random.default_rng(7).normal(0, 0.05, FRAME).astype(np.float32)
+    refs = []
+    gc.collect()
+    rss0 = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    for _ in range(200):
+        b.start_reply()
+        refs.append(weakref.ref(b.aec))
+        for _ in range(5):
+            b.feed(frame, frame)
+    gc.collect()
+    alive = sum(r() is not None for r in refs)
+    grew = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss - rss0
+    grew_mb = grew / (1 << 20) if sys.platform == "darwin" else grew / 1024   # bytes vs KiB
+    assert alive == 1, f"{alive} cancellers still alive"
+    assert grew_mb < 50, f"RSS grew {grew_mb:.0f} MB over 200 replies"
+
+
+def test_erle_holds_through_gaps_and_seeds_next_reply():
+    d = bargein.Detector(holdoff_ms=0)
+    for _ in range(40):                         # converged: 30 dB taken off
+        d.feed(-55.0, ref_db=-20.0, raw_db=-25.0)
+    good = d.erle_db
+    for _ in range(40):                         # pause between sentences: no playback
+        d.feed(-60.0, ref_db=-90.0, raw_db=-58.0)
+    assert d.erle_db == good and d.cancelling()
+    d.new_reply()
+    assert d.erle_db == good                    # the fresh canceller starts from it
+
+
+def test_coupling_learned_from_frames_with_playback_not_frame_numbers():
+    d = bargein.Detector(holdoff_ms=300)
+    for _ in range(20):                         # reply starts with silence
+        d.feed(-60.0, ref_db=-90.0, raw_db=-60.0)
+    assert d.coupling_db is None
+    for _ in range(30):
+        d.feed(-55.0, ref_db=-20.0, raw_db=-24.0)
+    assert d.coupling_db is not None and abs(d.coupling_db - (-4.0)) < 0.5
+    assert d.leak_db == pytest.approx(d.coupling_db - d.LEAK_UNDER_COUPLING, abs=1.5)
+
+
+def test_noise_and_leak_do_not_learn_from_the_person():
+    d = bargein.Detector(holdoff_ms=0)
+    for _ in range(30):
+        d.observe_quiet(-60.0)
+    for _ in range(200):                        # someone talking between replies
+        d.observe_quiet(-25.0)
+    assert d.noise_db < -59

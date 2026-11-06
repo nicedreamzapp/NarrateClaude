@@ -33,6 +33,7 @@ import json
 import math
 import os
 import queue
+import re
 import signal
 import socket
 import subprocess
@@ -79,17 +80,14 @@ class Endpointer:
     """
 
     def __init__(self, on_utterance, silence_sec=None, max_sec=None, min_speech_sec=None,
-                 start_frames=3, preroll_sec=0.5, min_level=None, ratio=3.0, floor_sec=5.0):
+                 start_frames=3, preroll_sec=0.5, min_level=0.006, ratio=3.0, floor_sec=5.0):
         self.on_utterance = on_utterance
         self.silence_frames = int((silence_sec or _env_float("LISTEN_SILENCE_SEC", 1.0)) * RATE / FRAME)
         self.max_frames = int((max_sec or _env_float("LISTEN_MAX_UTTER_SEC", 60.0)) * RATE / FRAME)
         self.min_speech_frames = int((min_speech_sec or _env_float("LISTEN_MIN_SPEECH_SEC", 0.2)) * RATE / FRAME)
         self.start_frames = start_frames
         self.preroll = int(preroll_sec * RATE / FRAME)
-        # Absolute floor under the room-relative gate. 0.006 (-44 dBFS) was above most of
-        # a quiet USB mic's speech (the mini's fifine: noise -70, speech peaks -39 dBFS),
-        # so only leaning in close got heard. LISTEN_MIN_LEVEL overrides.
-        self.min_level = _env_float("LISTEN_MIN_LEVEL", 0.0015) if min_level is None else min_level
+        self.min_level = min_level
         self.ratio = ratio
         self.floor = 0.0
         self.levels = collections.deque(maxlen=int(floor_sec * RATE / FRAME))
@@ -302,8 +300,10 @@ class WhisperServer:
     def transcribe(self, wav_bytes: bytes, timeout=120) -> str:
         import urllib.request
         boundary = uuid.uuid4().hex
-        # verbose_json carries whisper's per-segment no-speech probability (phantom filter).
-        fields = {"response_format": "verbose_json", "temperature": "0.0", "no_timestamps": "true"}
+        # verbose_json (barge-in mode only) adds whisper's per-segment no-speech probability.
+        verbose = getattr(self, "verbose", False)
+        fields = {"response_format": "verbose_json" if verbose else "json", "temperature": "0.0",
+                  "no_timestamps": "true"}
         body = io.BytesIO()
         for k, v in fields.items():
             body.write(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
@@ -315,9 +315,10 @@ class WhisperServer:
                                      headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode("utf-8", "replace"))
-        probs = [s.get("no_speech_prob") for s in data.get("segments") or []
-                 if isinstance(s, dict) and s.get("no_speech_prob") is not None]
-        self.last_no_speech = min(probs) if probs else None
+        if verbose:
+            probs = [s.get("no_speech_prob") for s in data.get("segments") or []
+                     if isinstance(s, dict) and s.get("no_speech_prob") is not None]
+            self.last_no_speech = min(probs) if probs else None
         return clean_text(data.get("text", ""))
 
 
@@ -390,15 +391,17 @@ HALLUCINATIONS = {"", "you", "thank you.", "thanks for watching!", "thank you fo
                   "thanks for watching.", ".", "bye.", "[blank_audio]", "(silence)"}
 
 
-# What whisper says when it hears a breath, a click or the room. Only dropped when the
-# audio backs that up (see is_phantom): a real, clearly spoken "okay" still goes through.
-FILLERS = {"okay", "ok", "okay okay", "thank you", "thanks", "you", "bye", "bye bye",
-           "hmm", "mm", "mhm", "um", "uh", "oh", "so", "the end", "i'm sorry"}
-NO_SPEECH_DROP = 0.8       # whisper is this sure nothing was said...
-NO_SPEECH_MAX_LOUD_SEC = 0.4  # ...and the audio agrees: drop whatever it wrote. (A real
-                              # "Stop, tell me about mountains" came back at 0.6+ in the room.)
-NO_SPEECH_FILLER = 0.2     # ...or a lone filler with even this much doubt
-FILLER_MIN_LOUD_SEC = 0.25  # a lone filler needs this much clearly-voiced audio behind it
+# Barge-in mode only (the default path never drops a transcript): whisper's phantoms on
+# a breath or the room. Dropped only when whisper itself says nothing was said AND the
+# audio is near the room floor; clear speech, and any yes/no answer, always go through.
+NO_SPEECH_DROP = 0.6
+PHANTOM_MAX_LOUD_SEC = 0.15
+YES_NO = {"yes", "no", "yeah", "yep", "yup", "nope", "nah"}   # never dropped
+
+
+def words_of(text: str) -> list:
+    """Lowercase words, punctuation gone ("Okay, okay." -> ["okay", "okay"])."""
+    return re.sub(r"[^\w\s']", " ", text.lower()).split()
 
 
 def loud_seconds(audio) -> float:
@@ -412,15 +415,12 @@ def loud_seconds(audio) -> float:
 
 
 def is_phantom(text: str, audio, no_speech=None) -> bool:
-    """A transcript nobody said: whisper's no-speech call, or a lone filler on a blip."""
-    if no_speech is not None and no_speech >= NO_SPEECH_DROP and loud_seconds(audio) < NO_SPEECH_MAX_LOUD_SEC:
-        return True
-    words = text.lower().strip().strip(".!?,").strip()
-    if words not in FILLERS:
+    """A transcript nobody said: whisper is sure there was no speech and the audio agrees."""
+    if no_speech is None or no_speech < NO_SPEECH_DROP:
         return False
-    if no_speech is not None and no_speech >= NO_SPEECH_FILLER:
-        return True
-    return loud_seconds(audio) < FILLER_MIN_LOUD_SEC
+    if set(words_of(text)) & YES_NO:
+        return False
+    return loud_seconds(audio) < PHANTOM_MAX_LOUD_SEC
 
 
 def clean_text(text: str) -> str:
@@ -495,7 +495,7 @@ class Listener:
                 common.log(f"stt: transcription failed: {e}")
                 self._live("done", "")
                 continue
-            if text and is_phantom(text, audio, getattr(self.server, "last_no_speech", None)):
+            if text and self.barge_in and is_phantom(text, audio, getattr(self.server, "last_no_speech", None)):
                 try:
                     with open(common.STATE_DIR / "dropped.log", "a", encoding="utf-8") as f:
                         f.write(f"stt\tphantom\t{text}\n")
@@ -557,6 +557,10 @@ class Listener:
         barge = self._barge_setup(bargein.enabled() if barge_in is None else barge_in)
         if barge:
             self.barge_in, self._ref = barge
+            # Barge-in mode: quiet USB mics (the mini's fifine: room -70, speech ~-42 dBFS)
+            # sat under the 0.006 floor; the room-relative ratio still does the work.
+            self.endpointer.min_level = _env_float("LISTEN_MIN_LEVEL", 0.0015)
+            self.server.verbose = True
         frames = queue.Queue()
         rate = RATE
         try:
