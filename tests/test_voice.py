@@ -58,14 +58,49 @@ def voice(tree, monkeypatch):
     ("[BLANK_AUDIO]", None),
     ("", None),
     ("   ", None),
-    ("okay", None),
-    ("yes please", None),
+    ("okay", "okay"),
+    ("Yes.", "Yes."),
+    ("Thank you!", "Thank you!"),
+    ("hi", None),
+    ("open the", None),
     ("Why?", "Why?"),
     ("open the deploy logs", "open the deploy logs"),
     ("  run the tests again  ", "run the tests again"),
 ])
 def test_gate(voice, text, out):
     assert voice.common.gate(text) == out
+
+
+@pytest.mark.parametrize("line,ssml", [
+    ("hi {.4} there", '<speak>hi <break time="0.4s"/> there</speak>'),
+    ("wait {100}", '<speak>wait <break time="5.0s"/></speak>'),  # capped
+    ("{fast:go {hi:up}}", '<speak><prosody rate="fast">go <prosody pitch="high">up</prosody></prosody></speak>'),
+    ("{spell:API}", '<speak><say-as interpret-as="characters">API</say-as></speak>'),
+    ("{s2:hello}", '<speak><voice name="s2">hello</voice></speak>'),
+    ("a < b & c", "<speak>a &lt; b &amp; c</speak>"),
+])
+def test_expand_shorthand(voice, line, ssml):
+    assert voice.common.expand(line) == ssml
+
+
+@pytest.mark.parametrize("text,out", [
+    ("[laugh] Okay {.4} so {fast:this is {hi:quick}}.", "Okay so this is quick."),
+    ('Done <break time="1s"/> {spell:API} {s2:bye}', "Done API bye"),
+    ("no markup here", "no markup here"),
+    ("a {set} literal {brace}", "a {set} literal {brace}"),
+])
+def test_plain_strips_markup_for_piper(voice, text, out):
+    assert voice.speak.plain(text) == out
+
+
+def test_piper_never_hears_shorthand(voice, fake_piper, tmp_path):
+    spoken = []
+    fake_piper.synthesize_wav = lambda self, text, wf: spoken.append(text) or (
+        wf.setnchannels(1), wf.setsampwidth(2), wf.setframerate(22050), wf.writeframes(b"\0\0"))
+    onnx = tmp_path / "v.onnx"
+    onnx.write_bytes(b"x")
+    assert voice.speak.main(["--out", str(tmp_path / "x.wav"), "--voice", str(onnx), "ok {.4} {fast:go}"]) == 0
+    assert spoken == ["ok go"]
 
 
 def test_gate_force(voice):
@@ -365,7 +400,7 @@ def test_player_command(voice):
 def test_typist_sends_text_then_enter_separately(voice):
     writes = []
     t = voice.session.Typist(writes.append, barge_in=False)
-    t.send("ok")  # gated: too short
+    t.send("(keyboard clicking)")  # gated: noise marker
     t.send("open the deploy logs\nplease")
     deadline = time.time() + 5
     while len(writes) < 2 and time.time() < deadline:
@@ -443,7 +478,7 @@ def test_session_pty_with_stub(tree, tmp_path):
     def send(text):
         return subprocess.run([sys.executable, str(tree / "voice" / "session.py"), "--send", text],
                               env=env, capture_output=True, text=True, timeout=20)
-    assert send("hi").returncode == 0          # accepted, then dropped by the gate
+    assert send("(coughing)").returncode == 0  # accepted, then dropped by the gate
     assert send("open the deploy logs").returncode == 0
     time.sleep(1.0)  # let the typist finish before the keyboard types
     # Keyboard input still passes through to the program.

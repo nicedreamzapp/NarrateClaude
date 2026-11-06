@@ -76,8 +76,9 @@ def test_inject_requires_binding(tmp_path):
     "(footsteps)",
     "[BLANK_AUDIO]",
     "",
-    "okay",
-    "yes please",
+    "open the",
+    "hi",
+    "the deploy.",
 ])
 def test_inject_gate_drops_noise_and_fragments(inject, text):
     assert gate_dropped(run(["bash", str(inject), text]))
@@ -85,10 +86,15 @@ def test_inject_gate_drops_noise_and_fragments(inject, text):
 
 @pytest.mark.parametrize("text", [
     "why?",
+    "okay",
+    "Okay.",
+    "Stop!",
+    "yes please",
+    "Go  ahead.",
     "open the file",
     "please run all the tests again",
 ])
-def test_inject_gate_passes_questions_and_sentences(inject, text):
+def test_inject_gate_passes_short_replies_and_sentences(inject, text):
     assert gate_passed(run(["bash", str(inject), text]))
 
 
@@ -100,7 +106,7 @@ def test_inject_force_bypasses_gate(inject):
 def test_inject_reads_stdin_and_joins_args(inject):
     assert gate_passed(run(["bash", str(inject)], input="run the tests now\n"))
     assert gate_passed(run(["bash", str(inject), "run", "the", "tests"]))
-    assert gate_dropped(run(["bash", str(inject)], input="okay\n"))
+    assert gate_dropped(run(["bash", str(inject)], input="(keyboard clicking)\n"))
 
 
 # --- dictation control CLI ----------------------------------------------------

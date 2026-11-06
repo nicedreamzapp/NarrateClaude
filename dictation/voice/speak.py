@@ -15,6 +15,7 @@ falls back to `say` and Linux to espeak-ng.
 """
 
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -29,6 +30,16 @@ import common  # noqa: E402
 _player = None
 
 
+# Chatterbox tags ([laugh], [chuckle], [sigh], ...): other voices would read them out.
+TAG_RE = re.compile(r"\[[a-z ]+\]\s*", re.I)
+
+
+def plain(text: str) -> str:
+    """For Piper / say: drop Chatterbox tags, SSML and the {.4} / {fast:...} shorthand."""
+    text = common.strip_shorthand(re.sub(r"<[^>]+>", " ", TAG_RE.sub("", text)))
+    return " ".join(text.split())
+
+
 def synthesize(text: str, out_path: str, voice_path=None) -> None:
     """Text -> WAV with Piper. Raises if Piper or the voice is missing."""
     from piper import PiperVoice  # installed into the venv by install.sh
@@ -39,6 +50,139 @@ def synthesize(text: str, out_path: str, voice_path=None) -> None:
     voice = PiperVoice.load(str(voice_path))
     with wave.open(out_path, "wb") as wf:
         voice.synthesize_wav(text, wf)
+
+
+CHATTERBOX_PY = Path("~/.local/share/explain-as-podcast/venv/bin/python").expanduser()
+CHATTERBOX_VOICE = os.environ.get("NARRATE_CHATTERBOX_VOICE", "~/.local/share/explain-as-podcast/voices/s1.wav")
+
+
+def chatterbox_connect():
+    """A socket to chatterbox_server.py with the request not yet sent; starts the server on first use
+    (loading the model takes ~20 s once)."""
+    import socket
+    import time
+    sock_path = str(common.STATE_DIR / "chatterbox.sock")
+
+    def connect():
+        s = socket.socket(socket.AF_UNIX)
+        try:
+            s.connect(sock_path)
+            return s
+        except OSError:
+            s.close()
+            raise
+
+    try:
+        return connect()
+    except (FileNotFoundError, ConnectionRefusedError):
+        pass
+    if not CHATTERBOX_PY.exists():
+        raise FileNotFoundError(f"Chatterbox venv not found: {CHATTERBOX_PY}")
+    import fcntl
+    common.STATE_DIR.mkdir(parents=True, exist_ok=True)
+    pid_file = common.STATE_DIR / "chatterbox.pid"
+    # One starter at a time: a second speak during the first load waits here, then connects to that server
+    # instead of starting another (which would delete the first one's socket). Released when this returns.
+    with open(common.STATE_DIR / "chatterbox.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            return connect()
+        except (FileNotFoundError, ConnectionRefusedError):
+            pass
+        try:
+            pid = int(pid_file.read_text())
+        except (OSError, ValueError):
+            pid = 0
+        proc = None
+        # (A stale pid reused by another process only means waiting out the two minutes once.)
+        if not (pid and _alive(pid)):  # else a server is still loading (its starter was stopped): wait for it
+            with open(common.STATE_DIR / "chatterbox.log", "ab") as logf:
+                proc = subprocess.Popen([str(CHATTERBOX_PY), str(Path(__file__).with_name("chatterbox_server.py")),
+                                         sock_path, CHATTERBOX_VOICE], stdout=logf, stderr=logf,
+                                        stdin=subprocess.DEVNULL, start_new_session=True)
+            pid = proc.pid
+            pid_file.write_text(str(pid))
+        for _ in range(240):  # up to 2 minutes for the first model load
+            time.sleep(0.5)
+            try:
+                return connect()
+            except (FileNotFoundError, ConnectionRefusedError):
+                pass
+            if (proc.poll() is not None) if proc else not _alive(pid):
+                raise RuntimeError("chatterbox server exited; see state/chatterbox.log")
+    raise RuntimeError("chatterbox server didn't start; see state/chatterbox.log")
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def chatterbox_play(sock, text: str) -> None:
+    """Play the line through ffplay while the server is still generating it.
+
+    ffplay is fed 0.2 s blocks in real time, and silence whenever the next piece isn't ready yet:
+    on macOS ffplay goes quiet for good if its input stalls (same trick as explain-as-podcast).
+    """
+    import queue
+    import threading
+    import time
+    global _player
+    sr, block = 24000, 24000 // 5 * 4  # float32 mono: 0.2 s = 19200 bytes
+    env = dict(os.environ, SDL_AUDIO_DRIVER="coreaudio", SDL_AUDIODRIVER="coreaudio") if common.IS_MACOS else None
+    sock.sendall((" ".join(text.split()) + "\n").encode())
+    q = queue.Queue()
+
+    def read():
+        try:
+            while data := sock.recv(65536):
+                q.put(data)
+        except OSError:  # socket closed under us by a barge-in
+            pass
+        finally:
+            q.put(None)
+
+    threading.Thread(target=read, daemon=True).start()
+    _player = subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", "-f", "f32le",
+                                "-ar", str(sr), "-ch_layout", "mono", "-i", "-"],
+                               stdin=subprocess.PIPE, env=env)
+    # The first streamed piece (~0.56 s of audio) lands at ~0.5 s, but the second takes ~1.1 s more,
+    # so playing at once speaks a word, stalls, then resumes. Wait for ~1 s of audio (or the end) first.
+    preroll = int(float(os.environ.get("NARRATE_CB_PREROLL", "1.0")) * sr) * 4
+    buf, done, sent, t0, started = b"", False, 0.0, time.monotonic(), False
+    try:
+        while not done or buf:
+            while not done:
+                try:
+                    data = q.get_nowait()
+                except queue.Empty:
+                    break
+                if data is None:
+                    done = True
+                else:
+                    buf += data
+            started = started or done or len(buf) >= preroll
+            if started and (len(buf) >= block or (done and buf)):
+                cut = min(len(buf), block) // 4 * 4
+                data, buf = buf[:cut], buf[cut:]
+                if not data:  # a stray partial sample at the very end
+                    break
+            else:
+                data = bytes(block)  # nothing ready yet: keep ffplay fed with silence
+            _player.stdin.write(data)
+            sent += len(data) / 4 / sr
+            ahead = sent - (time.monotonic() - t0)
+            if ahead > 0.5:
+                time.sleep(ahead - 0.5)
+        _player.stdin.close()
+        _player.wait()
+    except BrokenPipeError:
+        pass
+    finally:
+        _player = None
 
 
 def fallback_synthesize(text: str, out_path: str) -> bool:
@@ -85,6 +229,23 @@ def _on_term(*_):
     sys.exit(0)
 
 
+def speaking(play_fn) -> int:
+    """Run play_fn with state/speaking.pid set, so the listener stays deaf and barge-in can stop us."""
+    if not common.IS_WINDOWS:
+        signal.signal(signal.SIGTERM, _on_term)
+    common.STATE_DIR.mkdir(parents=True, exist_ok=True)
+    common.SPEAKING_FILE.write_text(str(os.getpid()))
+    try:
+        play_fn()
+    finally:
+        try:
+            if common.speaking_pid() == os.getpid():
+                common.SPEAKING_FILE.unlink()
+        except OSError:
+            pass
+    return 0
+
+
 def main(argv=None) -> int:
     import argparse
     ap = argparse.ArgumentParser(description="Say text with the local Piper voice.")
@@ -96,6 +257,16 @@ def main(argv=None) -> int:
     if not text:
         return 0
 
+    if os.environ.get("NARRATE_TTS") == "chatterbox" and not (args.out or args.voice) and shutil.which("ffplay"):
+        try:
+            sock = chatterbox_connect()
+        except Exception as e:
+            common.log(f"speak: {e}; using Piper")
+        else:
+            with sock:
+                return speaking(lambda: chatterbox_play(sock, text))
+
+    text = plain(text)
     target = args.out
     tmp = None
     if not target:
@@ -111,19 +282,7 @@ def main(argv=None) -> int:
                 return 1
         if args.out:
             return 0
-        if not common.IS_WINDOWS:
-            signal.signal(signal.SIGTERM, _on_term)
-        common.STATE_DIR.mkdir(parents=True, exist_ok=True)
-        common.SPEAKING_FILE.write_text(str(os.getpid()))
-        try:
-            play(target)
-        finally:
-            try:
-                if common.speaking_pid() == os.getpid():
-                    common.SPEAKING_FILE.unlink()
-            except OSError:
-                pass
-        return 0
+        return speaking(lambda: play(target))
     finally:
         if tmp:
             try:

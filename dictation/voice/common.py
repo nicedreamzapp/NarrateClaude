@@ -133,6 +133,15 @@ def whisper_server_bin() -> Path:
     return d / "whisper.cpp" / "build" / "bin" / exe
 
 
+def parakeet_model() -> Path:
+    env = os.environ.get("NARRATE_PARAKEET_MODEL", "").strip()
+    if env:
+        return Path(env).expanduser()
+    # English-only v2 when installed (better on English), else multilingual v3.
+    en = models_dir() / "parakeet-tdt-0.6b-v2-int8"
+    return en if en.is_dir() else models_dir() / "parakeet-tdt-0.6b-v3-int8"
+
+
 def piper_voice() -> Path:
     env = os.environ.get("NARRATE_PIPER_VOICE", "").strip() or DEFAULT_PIPER_VOICE
     p = Path(env).expanduser()
@@ -146,11 +155,22 @@ def piper_voice() -> Path:
 _MARKER_RE = re.compile(r"^\s*[\(\[].*[\)\]]\s*$")
 
 
+# Real one- and two-word answers. Any other fragment under three words is
+# almost always a false end-of-speech chopping a sentence (the May bug:
+# fragments typed and Enter pressed over the user's typing), so it's dropped.
+SHORT_REPLIES = {
+    "yes", "yeah", "yep", "no", "nope", "ok", "okay", "sure", "stop", "continue",
+    "go ahead", "go on", "do it", "yes please", "no thanks", "thanks", "thank you",
+    "cancel", "wait", "done", "next",
+}
+
+
 def gate(text: str, force: bool = False) -> "str | None":
     """Return the text to send, or None to drop it.
 
     Drops pure noise markers ("(keyboard clicking)", "[BLANK_AUDIO]") and
-    fragments under three words, unless the fragment ends in "?".
+    fragments under three words, unless the fragment ends in "?" or is a
+    real short reply ("Yes.", "Okay.", "Stop.", see SHORT_REPLIES).
     """
     text = (text or "").strip()
     if not text:
@@ -159,9 +179,52 @@ def gate(text: str, force: bool = False) -> "str | None":
         return text
     if _MARKER_RE.match(text):
         return None
-    if len(text.split()) < 3 and not text.endswith("?"):
+    if (len(text.split()) < 3 and not text.endswith("?")
+            and " ".join(text.lower().rstrip(".!,").split()) not in SHORT_REPLIES):
         return None
     return text
+
+
+# --- narration shorthand ({.4} pause, {fast:...} etc.) -----------------------
+# Expanded to SSML for Chatterbox (chatterbox_server.py); stripped for Piper / say.
+#   {.4} / {2}        pause, seconds (capped)  {fast:..} {slow:..}   rate
+#   {hi:..} {lo:..}   pitch                    {loud:..} {soft:..}   volume
+#   {spell:API}       spell it out             {s2:..} {hifi-92:..}  another voice
+
+SHORT = {"fast": '<prosody rate="fast">', "slow": '<prosody rate="slow">', "hi": '<prosody pitch="high">',
+         "lo": '<prosody pitch="low">', "loud": '<prosody volume="loud">', "soft": '<prosody volume="soft">',
+         "spell": '<say-as interpret-as="characters">'}
+PAUSE_MAX = 5.0  # seconds: a typo like {100} shouldn't be 100 s of silence
+_PAUSE_RE = re.compile(r"\{(\d*\.?\d+)\}")
+_SPAN_RE = re.compile(r"\{([\w-]+):([^{}]*)\}")
+
+
+def expand(line: str) -> str:
+    """Shorthand -> SSML (innermost braces first, so they nest)."""
+    line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    line = _PAUSE_RE.sub(lambda m: f'<break time="{min(float(m.group(1)), PAUSE_MAX)}s"/>', line)
+
+    def tag(m):
+        key, body = m.group(1), m.group(2)
+        if key in SHORT:
+            open_ = SHORT[key]
+            return f"{open_}{body}</{open_[1:].split()[0]}>"
+        return f'<voice name="{key}">{body}</voice>'
+    while _SPAN_RE.search(line):
+        line = _SPAN_RE.sub(tag, line)
+    return f"<speak>{line}</speak>"
+
+
+def has_shorthand(line: str) -> bool:
+    return bool(_PAUSE_RE.search(line) or _SPAN_RE.search(line))
+
+
+def strip_shorthand(line: str) -> str:
+    """For voices without the markup: {.4} -> nothing, {fast:text} -> text, nested too."""
+    line = _PAUSE_RE.sub(" ", line)
+    while _SPAN_RE.search(line):
+        line = _SPAN_RE.sub(r"\2", line)
+    return line
 
 
 # --- "is the computer talking right now?" -----------------------------------

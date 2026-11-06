@@ -51,9 +51,10 @@ TEXT="${TEXT%$'\n'}"
 #      "(footsteps)", "(silence)", "[BLANK_AUDIO]" etc. on non-speech audio.
 #      We don't want any of those in the Claude session.
 #   2. Drop too-short fragments (< 3 words) UNLESS the line ends in "?"
-#      (so single-word questions like "Why?" still go through). Smart Turn
-#      occasionally chops mid-sentence; the resulting 1–2 word fragment is
-#      almost never a complete thought and isn't worth submitting.
+#      (so single-word questions like "Why?" still go through) or is a real
+#      short reply ("Yes.", "Okay.", "Stop."; same list as SHORT_REPLIES in
+#      voice/common.py). Smart Turn occasionally chops mid-sentence; any
+#      other 1–2 word fragment is almost never a complete thought.
 #
 # Override the gate with INJECT_FORCE=1 if a caller really wants the text
 # through (e.g. the manual `dictation send` debug path).
@@ -66,7 +67,11 @@ if [ "${INJECT_FORCE:-0}" != "1" ]; then
     word_count=$(printf '%s' "$TEXT" | /usr/bin/awk '{print NF}')
     last_char="${TEXT: -1}"
     if [ "$word_count" -lt 3 ] && [ "$last_char" != "?" ]; then
-        exit 0
+        reply=$(printf '%s' "$TEXT" | /usr/bin/tr '[:upper:]' '[:lower:]' | /usr/bin/sed -E 's/[.!,]+$//; s/^ +//; s/ +$//; s/ +/ /g')
+        case "$reply" in
+            yes|yeah|yep|no|nope|ok|okay|sure|stop|continue|"go ahead"|"go on"|"do it"|"yes please"|"no thanks"|thanks|"thank you"|cancel|wait|done|next) ;;
+            *) exit 0 ;;
+        esac
     fi
 fi
 
