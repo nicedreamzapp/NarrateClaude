@@ -23,11 +23,11 @@ The default is English (`NARRATE_WHISPER_LANG=en`). `large-v3-turbo` is multilin
 
 ## Can I interrupt it while it is talking?
 
-Not by voice. The mic is paused while the voice plays. Starting to speak right after a reply ends works, and a new injected line kills any speech still playing. The interruptible 2.0 work is described in the research logs but not published.
+Yes, on macOS, since 2.0. Start with `NARRATE_BARGE_IN=2` and talk over the voice to stop it; see [Barge-in](barge-in.md) for setup, numbers and limits. It works with voices that play a WAV through `afplay` (Piper, Kokoro), not Chatterbox. Without it the mic is paused while the voice plays, and a new injected line kills any speech still playing.
 
-## Why does "yes" not go through?
+## Why does a short line not go through?
 
-The injector drops lines under 3 words unless they end in a question mark. Whisper adds punctuation, so "why?" can pass. Set `INJECT_FORCE=1` to turn the gate off.
+The injector drops lines under 3 words unless they end in a question mark or are a common short reply ("yes", "no", "okay", "stop", "do it", "go ahead" and a few more). Whisper adds punctuation, so "why?" can pass. Set `INJECT_FORCE=1` to turn the gate off.
 
 ## Do I need a cloned voice?
 

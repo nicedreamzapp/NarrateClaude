@@ -116,9 +116,13 @@ Expected with this repo. The v1 listener emits text without audio, so `filter.py
 
 It exits quietly on any problem. Check that `SPEAK` and `FLAG` at the top of the file point to real paths on your Mac (the repo has the author's paths), and that the `FLAG` file exists.
 
-## macOS 26 and the 2.0 listener
+## Barge-in never fires
 
-[Issue #1](https://github.com/nicedreamzapp/NarrateClaude/issues/1) (closed) reported no transcripts from the unpublished v2 listener with voice processing on macOS 26.4. It does not affect the v1 listener in this repo, which does not enable voice processing.
+Check that the echo canceller is installed in the venv (`requirements-bargein.txt`, see [Barge-in](barge-in.md)) and that your voice plays a WAV through `afplay`; anything else falls back to the muted behavior. Then run with `NARRATE_BARGE_DEBUG=1` and compare your level with the "needs >" number in `dictation/state/bargein.log`. A quiet USB mic or a loud fan can keep you under it.
+
+## macOS 26 and the Swift voice-processing prototype
+
+[Issue #1](https://github.com/nicedreamzapp/NarrateClaude/issues/1) (closed) reported no transcripts from the unpublished Swift prototype with Apple's voice processing on macOS 26.4. It does not affect the listeners in this repo, which do not enable Apple's voice processing.
 
 ## Still stuck
 

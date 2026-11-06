@@ -112,6 +112,8 @@ The judge server is `mlx_lm server` from [mlx-lm](https://github.com/ml-explore/
 
 The voice side is plain Claude Code behavior. `CLAUDE.md` in the repo root tells Claude to speak every step with `~/.local/bin/speak`. The launcher starts `claude` in that folder so the file is loaded as project instructions. `speak-on-stop` is an optional Stop hook that reads the final reply instead.
 
-## The 2.0 research
+## Barge-in and the research behind it
 
-The repo also contains research logs for a full-duplex "Talking Stick" version that can be interrupted mid-reply: [`EXPERIMENT_PLAN.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/EXPERIMENT_PLAN.md), [`BARGE_IN_ATTEMPTS.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/BARGE_IN_ATTEMPTS.md) and [`RESEARCH_2026_05_21.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/RESEARCH_2026_05_21.md). Per the log, Apple's voice processing I/O did not hold up (attempts 1 and 5), and the setup that worked live was WebRTC AEC3 with an energy gate (attempt 7). That code lives in a local `dictation-v2/` folder that is git-ignored and not published.
+With `NARRATE_BARGE_IN=2` on macOS the listener keeps the mic open while the voice plays, cancels the playback with WebRTC AEC3 and stops the voice when you talk over it. That is `dictation/voice/bargein.py`, covered on the [Barge-in](barge-in.md) page.
+
+The research logs that led there: [`EXPERIMENT_PLAN.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/EXPERIMENT_PLAN.md), [`BARGE_IN_ATTEMPTS.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/BARGE_IN_ATTEMPTS.md) and [`RESEARCH_2026_05_21.md`](https://github.com/nicedreamzapp/NarrateClaude/blob/main/RESEARCH_2026_05_21.md). Per the log, Apple's voice processing I/O did not hold up (attempts 1 and 5), and WebRTC AEC3 with an energy gate worked live in a separate Swift prototype (attempt 7). Attempt 8 brought the same echo canceller into the Python voice loop with a gate that learns each room, and that is what ships in 2.0. The Swift prototype stays in a local, git-ignored `dictation-v2/` folder.

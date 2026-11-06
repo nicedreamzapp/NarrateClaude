@@ -1,9 +1,9 @@
 site_name: NarrateClaude
 site_description: >-
-  NarrateClaude is a hands-free voice loop for Claude Code on macOS. It
-  transcribes your speech on-device with Apple's Speech framework, types it
-  into the Terminal window running claude, and speaks replies through any
-  voice you plug in.
+  NarrateClaude is a hands-free voice loop for Claude Code on macOS, Linux
+  and Windows. It transcribes your speech on your own machine with
+  whisper.cpp, types it into claude, speaks replies through any voice you
+  plug in, and on macOS lets you talk over the voice to stop it.
 site_author: nicedreamzapp
 # Placeholder until GitHub Pages is switched on for this repo.
 site_url: https://nicedreamzapp.github.io/NarrateClaude/
@@ -83,6 +83,7 @@ nav:
   - Quickstart: quickstart.md
   - Configuration: configuration.md
   - How it works: how-it-works.md
+  - Barge-in: barge-in.md
   - Troubleshooting: troubleshooting.md
   - FAQ: faq.md
   - Changelog: changelog.md
