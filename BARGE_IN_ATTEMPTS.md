@@ -327,3 +327,35 @@ through — the 12B local judge was tried and is too slow (>2.5 s/call);
 session-level judgment stays the backstop. dispatch-v2 respawn loop also has
 a latent wedge: killing talkingstick leaves the FIFO cat-subshell blocking
 the pipeline, so the respawn never fires — restart dispatch-v2 wholesale.
+
+## Attempt 8 — Python voice loop: WebRTC AEC3 from the livekit wheel + LiveBargeIn gate (2026-11-05)
+
+**What:** the open-source voice loop (`dictation/voice/stt.py`, Python) gets barge-in
+behind `NARRATE_BARGE_IN=2` (or `stt.py --barge-in`). New file `dictation/voice/bargein.py`.
+- **AEC:** WebRTC AEC3 via `livekit.rtc.AudioProcessingModule` (pip wheel bundles
+  webrtc's APM, no build). The PyPI `webrtc-audio-processing` / `aec-audio-processing`
+  packages fail to build on macOS arm64 (tried 2026-11-05). Speex is not used: Attempt 7
+  measured AEC3 far stronger.
+- **Reference:** the exact WAV `afplay` is playing (read from its command line, polled
+  every 50 ms), lined up against a running count of mic samples. The reference is
+  anchored slightly early so it always leads the echo; AEC3's delay estimator finds the rest.
+- **Gate:** the iPhone app's `LiveBargeIn`, ported: cleaned level must beat
+  max(-38 dBFS, leftover-echo estimate + 10 dB) on 4 of the last 10 frames (30 ms),
+  after a 300 ms hold-off at the start of each reply. This is a level gate on the
+  *echo-cancelled* signal, not on the raw mic (Hard Rule 1 is about raw-mic amplitude).
+- **On a hit:** stop afplay (and the `speak` script that owns it, so no next chunk),
+  hand the last 1.5 s of cleaned audio to the endpointer, transcribe; the session's
+  Typist sends Escape + the text as for any new request.
+- **Fail safe:** no livekit, or something playing that isn't a readable afplay WAV
+  (e.g. `afplay -r`, Chatterbox's ffplay stream): deaf while it talks, as before.
+
+**Offline result (tests/test_bargein.py, `say -o` clips, simulated room echo with
+reflections, 30-250 ms delay, gain 0.4-0.8, one overdriven case):** 0 false barge-ins on
+echo alone (16 reply-length runs; residual echo peaked at -38 dBFS, never a frame above
+the gate). Latency from speech onset: 130-300 ms typical, one 890 ms worst case
+(quiet voice, 250 ms delay: AEC3's suppressor eats the first word in double-talk).
+whisper small.en transcribed all three barged utterances word-for-word with no TTS words.
+
+**Not yet measured:** a real room through the desk speakers. Tune with
+`NARRATE_BARGE_FLOOR_DB` / `NARRATE_BARGE_MARGIN_DB` / `NARRATE_BARGE_FRAMES`;
+`NARRATE_BARGE_DEBUG=1` logs levels to `dictation/state/bargein.log`.

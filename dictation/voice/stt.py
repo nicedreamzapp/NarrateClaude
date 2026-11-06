@@ -20,6 +20,9 @@ Env:
   LISTEN_MAX_UTTER_SEC hard cap on one utterance (default 60)
   LISTEN_MIN_SPEECH_SEC shorter bursts are ignored (default 0.2)
   LISTEN_EMIT_WAV      1 = print "text<TAB>wav_path" (for the voiceprint filter)
+  NARRATE_BARGE_IN     2 = keep listening while the computer talks, cancel its
+                       own voice and stop it when you talk over it (bargein.py;
+                       same as --barge-in). Anything else: deaf while it talks.
   NARRATE_WHISPER_LANG spoken language (default en; "auto" to detect)
   NARRATE_WHISPER_THREADS  CPU threads for whisper (default: half the cores, 4-8)
 """
@@ -403,6 +406,7 @@ class Listener:
         self.endpointer = Endpointer(self.jobs.put)
         self.speaking = False
         self._muted_until = 0.0
+        self.barge_in = None  # set by run_mic when barge-in is on and AEC loads
         self._worker = threading.Thread(target=self._transcribe_loop, daemon=True)
         # Live transcript for the Claude Code band (only Parakeet is fast enough to re-run mid-utterance).
         self.live = isinstance(self.server, ParakeetServer)
@@ -484,10 +488,25 @@ class Listener:
             self.speaking = now_speaking
             time.sleep(0.15)
 
-    def run_mic(self):
+    def _barge_setup(self, want):
+        if not want:
+            return None
+        import bargein
+        if not bargein.EchoCanceller.available():
+            common.log("stt: barge-in needs the echo canceller (pip install livekit numpy); "
+                       "staying deaf while the computer talks")
+            return None
+        common.log("stt: barge-in on (WebRTC AEC3 + level gate); talk over the voice to stop it")
+        return bargein.BargeIn(), bargein.Reference(read_wav).start()
+
+    def run_mic(self, barge_in=None):
         import sounddevice as sd  # only needed for the live mic
+        import bargein
 
         threading.Thread(target=self._speaking_poller, daemon=True).start()
+        barge = self._barge_setup(bargein.enabled() if barge_in is None else barge_in)
+        if barge:
+            self.barge_in, self._ref = barge
         frames = queue.Queue()
         rate = RATE
         try:
@@ -496,26 +515,84 @@ class Listener:
             rate = int(sd.query_devices(kind="input")["default_samplerate"])
 
         def callback(indata, n, t, status):
-            frames.put(array("f", bytes(indata)))
+            frames.put((time.time(), array("f", bytes(indata))))
 
         blocksize = int(FRAME * rate / RATE)
         common.log(f"stt: listening (model {self.server.model.name}, {rate} Hz)")
         with sd.RawInputStream(samplerate=rate, channels=1, dtype="float32",
                             blocksize=blocksize, callback=callback):
-            pending = array("f")
             while not self.stopping.is_set():
                 try:
-                    block = frames.get(timeout=0.5)
+                    stamp, block = frames.get(timeout=0.5)
                 except queue.Empty:
                     continue
-                if self.speaking or time.monotonic() < self._muted_until:
-                    self.endpointer.reset()
-                    pending = array("f")
-                    continue
-                pending.extend(resample(block, rate) if rate != RATE else block)
-                while len(pending) >= FRAME:
-                    self.endpointer.feed(pending[:FRAME])
-                    del pending[:FRAME]
+                self.feed_block(resample(block, rate) if rate != RATE else block, stamp, time.monotonic())
+
+    def feed_block(self, block, stamp, now):
+        """One 16 kHz mic block captured at wall-clock `stamp`; `now` is time.monotonic()."""
+        if not hasattr(self, "_pending"):
+            self._pending = array("f")
+            self._received = 0       # 16 kHz samples in; `_received` lines up with `stamp`
+            self._done = 0           # samples handed on
+            self._reply, self._anchor, self._barged_until, self._last_dbg = None, 0, 0.0, 0.0
+        self._received += len(block)
+        if not self.barge_in:
+            if self.speaking or now < self._muted_until:
+                self.endpointer.reset()
+                self._pending = array("f")
+                return
+            self._pending.extend(block)
+            while len(self._pending) >= FRAME:
+                self.endpointer.feed(self._pending[:FRAME])
+                del self._pending[:FRAME]
+            return
+
+        import bargein
+        self._pending.extend(block)
+        while len(self._pending) >= FRAME:
+            frame = self._pending[:FRAME]
+            del self._pending[:FRAME]
+            start = self._done
+            self._done += FRAME
+            if now < self._barged_until:
+                # Just interrupted: the voice is stopped. Keep the canceller running on
+                # the room's echo tail (reference now silent) and transcribe.
+                clean, _ = self.barge_in.feed(frame, [0.0] * FRAME)
+                self.endpointer.feed(array("f", clean))
+                if self.endpointer.in_speech:
+                    self._barged_until = now + 1.0
+                continue
+            if not (self.speaking or now < self._muted_until):
+                self._reply = None
+                self.endpointer.feed(frame)
+                continue
+            cur, _unknown = self._ref.snapshot()
+            if cur is None:
+                # Talking, but we can't see what it plays: stay deaf (fail safe).
+                self.endpointer.reset()
+                continue
+            key, samples, t0 = cur
+            if key != self._reply:
+                self._reply = key
+                # Where playback t0 falls in our count of mic samples.
+                self._anchor = self._received - int((stamp - t0) * RATE)
+                self.barge_in.start_reply()
+                self.endpointer.reset()
+            ref = bargein.ref_frame(samples, start - self._anchor, FRAME)
+            _, fired = self.barge_in.feed(frame, ref)
+            if os.environ.get("NARRATE_BARGE_DEBUG") == "1" and now - self._last_dbg > 0.5:
+                self._last_dbg = now
+                bargein.log(f"level {self.barge_in.last_level:.1f} dB, "
+                            f"needs > {self.barge_in.det.threshold_db():.1f}")
+            if fired:
+                bargein.log(f"barge-in ({self.barge_in.last_level:.1f} dB over "
+                            f"{self.barge_in.det.echo_db:.1f} dB echo), stopping the voice")
+                bargein.stop_playback()
+                self.endpointer.reset()
+                for f in self.barge_in.take_preroll():
+                    self.endpointer.feed(array("f", f))
+                self._barged_until = now + 1.5
+                self._reply = None
 
 
 def main(argv=None) -> int:
@@ -523,6 +600,8 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--file", nargs="*", help="transcribe WAV files through the VAD instead of the mic")
     ap.add_argument("--model", help="ggml model path (default: picked for this machine)")
+    ap.add_argument("--barge-in", action="store_true",
+                    help="keep listening while the computer talks and stop it when you talk over it")
     ap.add_argument("--check", action="store_true",
                     help="exit 0 if whisper-server and a model are installed, print what will load")
     args = ap.parse_args(argv)
@@ -558,7 +637,7 @@ def main(argv=None) -> int:
             listener.drain()
         else:
             signal.signal(signal.SIGTERM, lambda *a: listener.stopping.set())
-            listener.run_mic()
+            listener.run_mic(barge_in=True if args.barge_in else None)
     except KeyboardInterrupt:
         pass
     finally:
