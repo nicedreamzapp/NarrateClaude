@@ -359,3 +359,25 @@ whisper small.en transcribed all three barged utterances word-for-word with no T
 **Not yet measured:** a real room through the desk speakers. Tune with
 `NARRATE_BARGE_FLOOR_DB` / `NARRATE_BARGE_MARGIN_DB` / `NARRATE_BARGE_FRAMES`;
 `NARRATE_BARGE_DEBUG=1` logs levels to `dictation/state/bargein.log`.
+
+### Attempt 8 — room trials on the M5 (2026-11-06, built-in speakers + mic, empty office)
+
+The mini's first live try never fired: its fifine USB mic is quiet (room -70 dBFS,
+speech peaks ~-39 cleaned) and the fixed -38 dBFS gate sat above the voice. Room
+recordings on the M5 (Kokoro replies through afplay, Matt's cloned voice played over
+them) showed two more problems the synthetic tests missed:
+- **One AEC3 instance across replies diverges.** The reference start is only known to
+  within a poll interval, so the speaker->mic delay differs per reply (measured lead
+  0.14-0.37 s); the carried-over canceller let the assistant's own words through at
+  -31 dBFS and fired twice on echo alone. Fix: a fresh canceller per reply (5 ms).
+- **Speaker transients leak** 7-15 dB under the playback level even when converged.
+Gate now (bargein.Detector): learned room noise + 12 dB, playback level + learned
+leak (prior = measured speaker->mic coupling - 10 dB) + 3 dB, leftover echo + 10 dB;
+4 of 10 frames; and never fires unless the canceller is removing >= 10 dB (ERLE guard).
+**Live M5 result** (listener in the background, Messages in front): 0 barge-ins on 20 s
+of silence and 3 full replies (~50 s); 9/10 double-talk trials fired (Matt's voice at
+two levels), voice stopped 0.16-0.39 s after he started (one 1.09 s), no assistant
+words in any transcript. The miss and the late one were the quiet "no, the other one".
+Also: whisper phantom filter (verbose_json no_speech_prob + lone-filler-on-a-blip rule,
+the mini's repeated "Okay."), and the endpointer's absolute floor lowered 0.006 -> 0.0015
+so quiet mics are heard without leaning in.

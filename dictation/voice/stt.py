@@ -79,14 +79,17 @@ class Endpointer:
     """
 
     def __init__(self, on_utterance, silence_sec=None, max_sec=None, min_speech_sec=None,
-                 start_frames=3, preroll_sec=0.5, min_level=0.006, ratio=3.0, floor_sec=5.0):
+                 start_frames=3, preroll_sec=0.5, min_level=None, ratio=3.0, floor_sec=5.0):
         self.on_utterance = on_utterance
         self.silence_frames = int((silence_sec or _env_float("LISTEN_SILENCE_SEC", 1.0)) * RATE / FRAME)
         self.max_frames = int((max_sec or _env_float("LISTEN_MAX_UTTER_SEC", 60.0)) * RATE / FRAME)
         self.min_speech_frames = int((min_speech_sec or _env_float("LISTEN_MIN_SPEECH_SEC", 0.2)) * RATE / FRAME)
         self.start_frames = start_frames
         self.preroll = int(preroll_sec * RATE / FRAME)
-        self.min_level = min_level
+        # Absolute floor under the room-relative gate. 0.006 (-44 dBFS) was above most of
+        # a quiet USB mic's speech (the mini's fifine: noise -70, speech peaks -39 dBFS),
+        # so only leaning in close got heard. LISTEN_MIN_LEVEL overrides.
+        self.min_level = _env_float("LISTEN_MIN_LEVEL", 0.0015) if min_level is None else min_level
         self.ratio = ratio
         self.floor = 0.0
         self.levels = collections.deque(maxlen=int(floor_sec * RATE / FRAME))
@@ -299,7 +302,8 @@ class WhisperServer:
     def transcribe(self, wav_bytes: bytes, timeout=120) -> str:
         import urllib.request
         boundary = uuid.uuid4().hex
-        fields = {"response_format": "json", "temperature": "0.0", "no_timestamps": "true"}
+        # verbose_json carries whisper's per-segment no-speech probability (phantom filter).
+        fields = {"response_format": "verbose_json", "temperature": "0.0", "no_timestamps": "true"}
         body = io.BytesIO()
         for k, v in fields.items():
             body.write(f"--{boundary}\r\nContent-Disposition: form-data; name=\"{k}\"\r\n\r\n{v}\r\n".encode())
@@ -311,6 +315,9 @@ class WhisperServer:
                                      headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
         with urllib.request.urlopen(req, timeout=timeout) as r:
             data = json.loads(r.read().decode("utf-8", "replace"))
+        probs = [s.get("no_speech_prob") for s in data.get("segments") or []
+                 if isinstance(s, dict) and s.get("no_speech_prob") is not None]
+        self.last_no_speech = min(probs) if probs else None
         return clean_text(data.get("text", ""))
 
 
@@ -381,6 +388,39 @@ def _looks_like_whisper(pid: int) -> bool:
 # Whisper fills silence or noise with these; they are never a real request.
 HALLUCINATIONS = {"", "you", "thank you.", "thanks for watching!", "thank you for watching.",
                   "thanks for watching.", ".", "bye.", "[blank_audio]", "(silence)"}
+
+
+# What whisper says when it hears a breath, a click or the room. Only dropped when the
+# audio backs that up (see is_phantom): a real, clearly spoken "okay" still goes through.
+FILLERS = {"okay", "ok", "okay okay", "thank you", "thanks", "you", "bye", "bye bye",
+           "hmm", "mm", "mhm", "um", "uh", "oh", "so", "the end", "i'm sorry"}
+NO_SPEECH_DROP = 0.8       # whisper is this sure nothing was said...
+NO_SPEECH_MAX_LOUD_SEC = 0.4  # ...and the audio agrees: drop whatever it wrote. (A real
+                              # "Stop, tell me about mountains" came back at 0.6+ in the room.)
+NO_SPEECH_FILLER = 0.2     # ...or a lone filler with even this much doubt
+FILLER_MIN_LOUD_SEC = 0.25  # a lone filler needs this much clearly-voiced audio behind it
+
+
+def loud_seconds(audio) -> float:
+    """Seconds of the utterance well above its own quietest part (the room)."""
+    levels = [rms(audio[i:i + FRAME]) for i in range(0, len(audio) - FRAME + 1, FRAME)]
+    if not levels:
+        return 0.0
+    quiet = sorted(levels)[len(levels) // 5]
+    gate = max(0.002, 4 * quiet)
+    return sum(1 for v in levels if v > gate) * FRAME / RATE
+
+
+def is_phantom(text: str, audio, no_speech=None) -> bool:
+    """A transcript nobody said: whisper's no-speech call, or a lone filler on a blip."""
+    if no_speech is not None and no_speech >= NO_SPEECH_DROP and loud_seconds(audio) < NO_SPEECH_MAX_LOUD_SEC:
+        return True
+    words = text.lower().strip().strip(".!?,").strip()
+    if words not in FILLERS:
+        return False
+    if no_speech is not None and no_speech >= NO_SPEECH_FILLER:
+        return True
+    return loud_seconds(audio) < FILLER_MIN_LOUD_SEC
 
 
 def clean_text(text: str) -> str:
@@ -455,6 +495,13 @@ class Listener:
                 common.log(f"stt: transcription failed: {e}")
                 self._live("done", "")
                 continue
+            if text and is_phantom(text, audio, getattr(self.server, "last_no_speech", None)):
+                try:
+                    with open(common.STATE_DIR / "dropped.log", "a", encoding="utf-8") as f:
+                        f.write(f"stt\tphantom\t{text}\n")
+                except OSError:
+                    pass
+                text = ""
             self._live("done", text)
             if not text:
                 continue
@@ -584,6 +631,7 @@ class Listener:
                     continue
             if not (self.speaking or now < self._muted_until):
                 self._reply = None
+                self.barge_in.idle(frame)
                 self.endpointer.feed(frame)
                 continue
             cur, _unknown = self._ref.snapshot()
@@ -602,8 +650,9 @@ class Listener:
             _, fired = self.barge_in.feed(frame, ref)
             if os.environ.get("NARRATE_BARGE_DEBUG") == "1" and now - self._last_dbg > 0.5:
                 self._last_dbg = now
-                bargein.log(f"level {self.barge_in.last_level:.1f} dB, "
-                            f"needs > {self.barge_in.det.threshold_db():.1f}")
+                det = self.barge_in.det
+                bargein.log(f"level {self.barge_in.last_level:.1f} dB, needs > {det.threshold_db():.1f} "
+                            f"(noise {det.noise_db}, leak {det.leak_db}, coupling {det.coupling_db})")
             if fired:
                 bargein.log(f"barge-in ({self.barge_in.last_level:.1f} dB over "
                             f"{self.barge_in.det.echo_db:.1f} dB echo), stopping the voice")

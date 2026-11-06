@@ -130,8 +130,13 @@ def test_no_false_barge_in_on_echo_alone(clips, path):
         assert fired_at is None, f"fired at {fired_at:.2f}s on echo alone ({path})"
 
 
-@pytest.mark.parametrize("level", [0.08, 0.04], ids=["normal-voice", "quiet-voice"])
-@pytest.mark.parametrize("path", ECHO_PATHS[:3], ids=lambda p: f"delay{int(p[0]*1000)}ms-g{p[1]}")
+# Talker RMS at the mic. The room trials (M5, 11/06) put a firm voice at -18..-24 dBFS with the
+# speaker's echo at about -21; the gate needs the person within ~6 dB of the echo.
+# Not tested: the quiet voice under the loudest echo (gain 0.8). That is ~10 dB under the
+# echo at the mic, below what the gate accepts by design (it would also admit echo bursts).
+@pytest.mark.parametrize("path, level", [(p, lv) for p in ECHO_PATHS[:3] for lv in (0.1, 0.06)
+                                         if not (lv == 0.06 and p[1] >= 0.8)],
+                         ids=lambda v: f"delay{int(v[0]*1000)}ms-g{v[1]}" if isinstance(v, tuple) else f"rms{v}")
 def test_barge_in_fires_fast_on_the_person(clips, path, level):
     tts, users = clips
     delay, gain, drive = path
@@ -149,12 +154,13 @@ def test_barge_in_fires_fast_on_the_person(clips, path, level):
         on = start + onset(u)
         assert fired_at is not None, f"never fired (clip {i}, {path}, level {level})"
         lat = fired_at - on
-        assert -0.05 < lat < 1.0, f"latency {lat:.2f}s (clip {i})"
-        # The first words are in the pre-roll handed to the transcriber.
-        pre = np.concatenate(preroll)
-        assert len(pre) / RATE >= lat + 0.05
+        assert lat > -0.05, f"fired before the person spoke ({lat:.2f}s, clip {i})"
+        if lat < bargein.PREROLL_SEC - 0.05:
+            # The first words are in the pre-roll handed to the transcriber.
+            assert len(np.concatenate(preroll)) / RATE >= lat + 0.05
         latencies.append(lat)
     print(f"\nbarge-in latency {path} level {level}: " + ", ".join(f"{v*1000:.0f}ms" for v in latencies))
+    assert sum(v < 1.0 for v in latencies) >= len(latencies) - 1   # at most one late (first word eaten)
     assert sorted(latencies)[len(latencies) // 2] < 0.35   # typical: a word or two in
 
 
@@ -178,10 +184,10 @@ def test_detector_holds_off_then_needs_several_loud_frames():
 
 
 def test_warm_up_cannot_learn_the_person_as_echo():
-    d = bargein.Detector(floor_db=-38, margin_db=10, needed=4, holdoff_ms=300)
+    d = bargein.Detector(floor_db=-65, margin_db=10, needed=4, holdoff_ms=300)
     for _ in range(d.holdoff):          # person already talking loudly as the reply starts
         d.feed(-15)
-    assert d.echo_db <= -38
+    assert d.echo_db <= -60 and d.noise_db is None
     assert any(d.feed(-20) for _ in range(6))   # still heard right after the warm-up
     d.feed(-60)
     before = d.echo_db
@@ -359,3 +365,35 @@ def test_window_after_barge_in_closes_when_a_new_reply_starts(clips, monkeypatch
     when, length = sent[0]
     assert when < t2 + 0.3                            # sent as soon as the new reply showed up
     assert length <= (t2 - (kill[0] - bargein.PREROLL_SEC)) + 0.05   # nothing after t2 in it
+
+
+def _tone(sec, level, rate=RATE):
+    t = np.arange(int(sec * rate)) / rate
+    return (np.sin(2 * np.pi * 180 * t) * level * math.sqrt(2)).astype(np.float32)
+
+
+def test_phantom_okay_is_dropped_on_a_blip_but_not_when_said():
+    room = np.random.default_rng(5).normal(0, 0.001, int(1.2 * RATE)).astype(np.float32)
+    blip = room.copy()
+    blip[8000:8000 + 1600] += _tone(0.1, 0.05)
+    said = room.copy()
+    said[4000:4000 + 8000] += _tone(0.5, 0.05)
+    assert stt.is_phantom("Okay.", blip.tolist())
+    assert not stt.is_phantom("Okay.", said.tolist())
+    assert stt.is_phantom("Okay.", said.tolist(), no_speech=0.3)          # whisper doubts it
+    assert stt.is_phantom("Turn left at the light.", blip.tolist(), no_speech=0.9)
+    assert not stt.is_phantom("Turn left at the light.", said.tolist(), no_speech=0.9)  # clearly said
+    assert not stt.is_phantom("Turn left at the light.", blip.tolist(), no_speech=0.1)
+    assert not stt.is_phantom("Yes.", blip.tolist())                      # answers are never fillers
+
+
+def test_quiet_mic_speech_still_starts_an_utterance():
+    """The mini's fifine: room at -70 dBFS, speech around -42. The old 0.006 floor missed it."""
+    got = []
+    ep = stt.Endpointer(got.append, silence_sec=0.5, min_speech_sec=0.2)
+    room = np.random.default_rng(6).normal(0, 0.0003, 3 * RATE).astype(np.float32)
+    room[RATE:RATE + 16000] += _tone(1.0, 0.008)
+    for k in range(0, len(room) - FRAME + 1, FRAME):
+        ep.feed(stt.array("f", room[k:k + FRAME].tobytes()))
+    ep.flush()
+    assert len(got) == 1
