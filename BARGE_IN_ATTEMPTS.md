@@ -327,3 +327,65 @@ through — the 12B local judge was tried and is too slow (>2.5 s/call);
 session-level judgment stays the backstop. dispatch-v2 respawn loop also has
 a latent wedge: killing talkingstick leaves the FIFO cat-subshell blocking
 the pipeline, so the respawn never fires — restart dispatch-v2 wholesale.
+
+## Attempt 8 — Python voice loop: WebRTC AEC3 from the livekit wheel + LiveBargeIn gate (2026-11-05)
+
+**What:** the open-source voice loop (`dictation/voice/stt.py`, Python) gets barge-in
+behind `NARRATE_BARGE_IN=2` (or `stt.py --barge-in`). New file `dictation/voice/bargein.py`.
+- **AEC:** WebRTC AEC3 via `livekit.rtc.AudioProcessingModule` (pip wheel bundles
+  webrtc's APM, no build). The PyPI `webrtc-audio-processing` / `aec-audio-processing`
+  packages fail to build on macOS arm64 (tried 2026-11-05). Speex is not used: Attempt 7
+  measured AEC3 far stronger.
+- **Reference:** the exact WAV `afplay` is playing (read from its command line, polled
+  every 50 ms), lined up against a running count of mic samples. The reference is
+  anchored slightly early so it always leads the echo; AEC3's delay estimator finds the rest.
+- **Gate:** the iPhone app's `LiveBargeIn`, ported: cleaned level must beat
+  max(-38 dBFS, leftover-echo estimate + 10 dB) on 4 of the last 10 frames (30 ms),
+  after a 300 ms hold-off at the start of each reply. This is a level gate on the
+  *echo-cancelled* signal, not on the raw mic (Hard Rule 1 is about raw-mic amplitude).
+- **On a hit:** stop afplay (and the `speak` script that owns it, so no next chunk),
+  hand the last 1.5 s of cleaned audio to the endpointer, transcribe; the session's
+  Typist sends Escape + the text as for any new request.
+- **Fail safe:** no livekit, or something playing that isn't a readable afplay WAV
+  (e.g. `afplay -r`, Chatterbox's ffplay stream): deaf while it talks, as before.
+
+**Offline result (tests/test_bargein.py, `say -o` clips, simulated room echo with
+reflections, 30-250 ms delay, gain 0.4-0.8, one overdriven case):** 0 false barge-ins on
+echo alone (16 reply-length runs; residual echo peaked at -38 dBFS, never a frame above
+the gate). Latency from speech onset: 130-300 ms typical, one 890 ms worst case
+(quiet voice, 250 ms delay: AEC3's suppressor eats the first word in double-talk).
+whisper small.en transcribed all three barged utterances word-for-word with no TTS words.
+
+**Not yet measured:** a real room through the desk speakers. Tune with
+`NARRATE_BARGE_FLOOR_DB` / `NARRATE_BARGE_MARGIN_DB` / `NARRATE_BARGE_FRAMES`;
+`NARRATE_BARGE_DEBUG=1` logs levels to `dictation/state/bargein.log`.
+
+### Attempt 8 — room trials on the M5 (2026-11-06, built-in speakers + mic, empty office)
+
+The mini's first live try never fired: its fifine USB mic is quiet (room -70 dBFS,
+speech peaks ~-39 cleaned) and the fixed -38 dBFS gate sat above the voice. Room
+recordings on the M5 (Kokoro replies through afplay, Matt's cloned voice played over
+them) showed two more problems the synthetic tests missed:
+- **One AEC3 instance across replies diverges.** The reference start is only known to
+  within a poll interval, so the speaker->mic delay differs per reply (measured lead
+  0.14-0.37 s); the carried-over canceller let the assistant's own words through at
+  -31 dBFS and fired twice on echo alone. Fix: a fresh canceller per reply (5 ms).
+- **Speaker transients leak** 7-15 dB under the playback level even when converged.
+Gate now (bargein.Detector): learned room noise + 12 dB, playback level + learned
+leak (prior = measured speaker->mic coupling - 10 dB) + 3 dB, leftover echo + 10 dB;
+4 of 10 frames; and never fires unless the canceller is removing >= 10 dB (ERLE guard).
+**Live M5 result** (listener in the background, Messages in front): 0 barge-ins on 20 s
+of silence and 3 full replies (~50 s); 9/10 double-talk trials fired (Matt's voice at
+two levels), voice stopped 0.16-0.39 s after he started (one 1.09 s), no assistant
+words in any transcript. The miss and the late one were the quiet "no, the other one".
+Also: whisper phantom filter (verbose_json no_speech_prob + lone-filler-on-a-blip rule,
+the mini's repeated "Okay."), and the endpointer's absolute floor lowered 0.006 -> 0.0015
+so quiet mics are heard without leaning in.
+Review round (same night): with barge-in off the listener is byte-for-byte the old one
+(0.006 floor, plain json, no transcript dropped). In barge-in mode the phantom filter
+only drops when whisper's no-speech probability is >= 0.6 AND the audio is at the room
+floor, never a yes/no. Coupling is learned from the first 30 frames that carry playback,
+ERLE only where there is echo to remove (held through pauses, carried to the next
+reply), and nothing is learned from frames near the person talking. Replaying tonight's
+room recordings as one session: 0 false barge-ins, 11/12 hits (median 0.14 s); at 20 dB
+quieter mic gain: 0 false, 11/12.

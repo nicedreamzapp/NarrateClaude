@@ -1,0 +1,5 @@
+# Optional: talk over the voice to stop it (NARRATE_BARGE_IN=2, see bargein.py).
+# The livekit wheel bundles WebRTC's audio processing module (AEC3 echo
+# canceller), prebuilt for macOS arm64/x86_64, Linux and Windows; nothing to compile.
+livekit==1.2.1
+numpy==2.5.4

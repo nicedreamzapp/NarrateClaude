@@ -14,7 +14,9 @@ When the command exits, the microphone and whisper-server go with it.
 
 Env:
   NARRATE_BARGE_IN   1 (default) = a new request stops the voice and sends
-                     Escape first, so Claude stops what it was doing
+                     Escape first, so Claude stops what it was doing;
+                     2 = that, plus talk over the voice to stop it mid-reply
+                     (echo-cancelled listening, see voice/bargein.py)
   NARRATE_RELEVANCE  1 (default) = run filter/relevance.py on each utterance
 """
 
@@ -50,7 +52,7 @@ class Typist:
 
     def __init__(self, write, barge_in=None):
         self.write = write
-        self.barge_in = os.environ.get("NARRATE_BARGE_IN", "1") == "1" if barge_in is None else barge_in
+        self.barge_in = os.environ.get("NARRATE_BARGE_IN", "1") in ("1", "2") if barge_in is None else barge_in
         self.q = queue.Queue()
         threading.Thread(target=self._run, daemon=True).start()
 
