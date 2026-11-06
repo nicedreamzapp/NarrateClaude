@@ -6,7 +6,7 @@ NARRATE_TTS=chatterbox. Protocol on the unix socket: the client sends one line o
 streams back raw float32 mono PCM at 24 kHz as it is generated, then closes. If the client hangs up
 (barge-in), generation stops. Text can carry Chatterbox tags like [laugh], [chuckle], [sigh].
 
-A line that starts with "<" is a podcast script, in explain-as-podcast's SSML (its scripts/ssml.py does
+A line with SSML tags in it is a podcast script, in explain-as-podcast's SSML (its scripts/ssml.py does
 the parsing): <break time="500ms"/>, <prosody rate pitch volume>, <voice name="s2"> (a file in its
 voices/ folder, or a path to a .wav), sampling attributes like temperature / seed, <sub>, <say-as>,
 <audio src>, <p>. Plain text streams as before; a <prosody> span is generated whole and then
@@ -137,10 +137,37 @@ def apply_prosody(wav, prosody):
     return np.clip(wav, -1.0, 1.0)
 
 
+# Shorthand for the same SSML, so narration costs fewer tokens:
+#   {.4} / {2}        pause, seconds           {fast:..} {slow:..}   rate
+#   {hi:..} {lo:..}   pitch                    {loud:..} {soft:..}   volume
+#   {spell:API}       spell it out             {s2:..} {hifi-92:..}  another voice
+SHORT = {"fast": '<prosody rate="fast">', "slow": '<prosody rate="slow">', "hi": '<prosody pitch="high">',
+         "lo": '<prosody pitch="low">', "loud": '<prosody volume="loud">', "soft": '<prosody volume="soft">',
+         "spell": '<say-as interpret-as="characters">'}
+
+
+def expand(line: str) -> str:
+    """Shorthand -> SSML (innermost braces first, so they nest)."""
+    line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    line = re.sub(r"\{(\d*\.?\d+)\}", lambda m: f'<break time="{float(m.group(1))}s"/>', line)  # ".4" -> "0.4"
+    span = re.compile(r"\{([\w-]+):([^{}]*)\}")
+    def tag(m):
+        key, body = m.group(1), m.group(2)
+        if key in SHORT:
+            open_ = SHORT[key]
+            return f"{open_}{body}</{open_[1:].split()[0]}>"
+        return f'<voice name="{key}">{body}</voice>'
+    while span.search(line):
+        line = span.sub(tag, line)
+    return f"<speak>{line}</speak>"
+
+
 def items(line: str):
-    if ssml and line.startswith("<"):
+    if ssml and re.search(r"\{(\d*\.?\d+|[\w-]+:[^{}]*)\}", line):
+        line = expand(line)
+    if ssml and re.search(r"<\w[^>]*>", line):  # any SSML tag, even mid-line after a [tag]
         try:
-            return ssml.parse(line, VOICE_DIR)
+            return ssml.parse(line if line.startswith("<speak") else f"<speak>{line}</speak>", VOICE_DIR)
         except Exception as e:  # bad markup: say the words rather than nothing
             print(f"ssml: {e}; speaking it as text", flush=True)
             line = re.sub(r"<[^>]+>", " ", line)
