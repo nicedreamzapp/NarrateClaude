@@ -114,7 +114,10 @@ def chatterbox_play(sock, text: str) -> None:
     _player = subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "error", "-f", "f32le",
                                 "-ar", str(sr), "-ch_layout", "mono", "-i", "-"],
                                stdin=subprocess.PIPE, env=env)
-    buf, done, sent, t0 = b"", False, 0.0, time.monotonic()
+    # The first streamed piece (~0.56 s of audio) lands at ~0.5 s, but the second takes ~1.1 s more,
+    # so playing at once speaks a word, stalls, then resumes. Wait for ~1 s of audio (or the end) first.
+    preroll = int(float(os.environ.get("NARRATE_CB_PREROLL", "1.0")) * sr) * 4
+    buf, done, sent, t0, started = b"", False, 0.0, time.monotonic(), False
     try:
         while not done or buf:
             while not done:
@@ -126,7 +129,8 @@ def chatterbox_play(sock, text: str) -> None:
                     done = True
                 else:
                     buf += data
-            if len(buf) >= block or (done and buf):
+            started = started or done or len(buf) >= preroll
+            if started and (len(buf) >= block or (done and buf)):
                 cut = min(len(buf), block) // 4 * 4
                 data, buf = buf[:cut], buf[cut:]
                 if not data:  # a stray partial sample at the very end
@@ -227,7 +231,7 @@ def main(argv=None) -> int:
             with sock:
                 return speaking(lambda: chatterbox_play(sock, text))
 
-    text = TAG_RE.sub("", text).strip()  # Piper / say: drop Chatterbox tags
+    text = re.sub(r"<[^>]+>", " ", TAG_RE.sub("", text)).strip()  # Piper / say: drop Chatterbox tags and SSML
     target = args.out
     tmp = None
     if not target:

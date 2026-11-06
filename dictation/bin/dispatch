@@ -86,6 +86,7 @@ _request_shutdown() {
 }
 
 window_watchdog() {
+    local misses=0
     while true; do
         sleep 3
         if [ ! -f "$TARGET_FILE" ]; then
@@ -96,10 +97,15 @@ window_watchdog() {
         local wid
         wid=$(/usr/bin/python3 -c "import json; print(json.load(open('$TARGET_FILE'))['window_id'])" 2>/dev/null)
         if [ -z "$wid" ]; then
+            # One failed read is usually a python3 hiccup, not a real unbind;
+            # only give up after three in a row (~9 s).
+            misses=$((misses + 1))
+            [ "$misses" -lt 3 ] && continue
             echo "[$(ts)] watchdog: no window_id in target file, requesting shutdown" >> "$LOG_FILE"
             _request_shutdown
             return
         fi
+        misses=0
         local exists
         exists=$(/usr/bin/osascript <<OSA 2>/dev/null
 tell application "Terminal"
