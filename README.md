@@ -338,6 +338,8 @@ irm https://raw.githubusercontent.com/nicedreamzapp/NarrateClaude/main/uninstall
 
 **Out of the box:** the installer's `~/.local/bin/speak` uses Piper, a local open-source voice. Nothing to set up.
 
+**Chatterbox Turbo (optional, macOS):** `export NARRATE_TTS=chatterbox` makes the built-in `speak` stream through a local Chatterbox Turbo server, with the expressive tags and `{.4}` / `{fast:…}` shorthand from `CLAUDE.md`. It needs `ffplay` (from ffmpeg) and the [explain-as-podcast](https://github.com/hershykoh/explain-as-podcast) Claude Code plugin installed, whose venv (`~/.local/share/explain-as-podcast/venv`) and voices it uses. Without them `speak` falls back to Piper, which strips the markup. Details: [docs/configuration.md](docs/configuration.md#chatterbox-voice-speakpy).
+
 **Your own cloned voice:** replace `~/.local/bin/speak` with any script that takes text as its arguments and plays it (Pocket TTS, your own clone, anything offline). Yours always wins; the installer never overwrites it. The listener mutes itself while a player like `afplay`, `aplay`, `paplay`, `pw-play` or `ffplay` is running, so play through one of those (`NARRATE_MUTE_PROCS` changes the list).
 
 ### 🎤 Grant microphone permission

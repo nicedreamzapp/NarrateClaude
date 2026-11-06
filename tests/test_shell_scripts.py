@@ -76,15 +76,21 @@ def test_inject_requires_binding(tmp_path):
     "(footsteps)",
     "[BLANK_AUDIO]",
     "",
+    "open the",
+    "hi",
+    "the deploy.",
 ])
-def test_inject_gate_drops_noise(inject, text):
+def test_inject_gate_drops_noise_and_fragments(inject, text):
     assert gate_dropped(run(["bash", str(inject), text]))
 
 
 @pytest.mark.parametrize("text", [
     "why?",
     "okay",
+    "Okay.",
+    "Stop!",
     "yes please",
+    "Go  ahead.",
     "open the file",
     "please run all the tests again",
 ])

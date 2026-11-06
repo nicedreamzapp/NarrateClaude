@@ -18,7 +18,9 @@ Env (read at server start; restart the server to change them):
   NARRATE_CB_FIRST_CHUNK  speech tokens in the first streamed piece (default 15; lower = sooner)
   NARRATE_CB_CHUNK        speech tokens in the second piece; later ones double (default 24; the
                           library's 50 left a ~0.6 s gap after a short first piece)
-  NARRATE_CB_WATERMARK    1 = apply the Perth watermark (default off: the audio never leaves the machine)
+  NARRATE_CB_WATERMARK    0 = skip the Perth watermark (default on)
+  NARRATE_CB_IDLE         seconds without a request before the server exits and frees the model
+                          (default 1800); the next speak starts it again
   NARRATE_CB_TEMPERATURE  delivery variety (default 0.8)
   NARRATE_CB_SEED         fixed seed so a line always sounds the same (default: random)
 """
@@ -33,6 +35,8 @@ import librosa
 import numpy as np
 import torch
 from chatterbox.tts_turbo_mlx import ChatterboxTurboMLX
+
+from common import expand, has_shorthand  # the {.4} / {fast:..} shorthand (this script's folder)
 
 SOCK = sys.argv[1]
 VOICE = os.path.expanduser(sys.argv[2])
@@ -49,7 +53,7 @@ else:
 
 OPTS = {"first_chunk_tokens": int(os.environ.get("NARRATE_CB_FIRST_CHUNK", "15")),
         "chunk_tokens": int(os.environ.get("NARRATE_CB_CHUNK", "24")),
-        "watermark": os.environ.get("NARRATE_CB_WATERMARK") == "1",
+        "watermark": os.environ.get("NARRATE_CB_WATERMARK", "1") != "0",
         "temperature": float(os.environ.get("NARRATE_CB_TEMPERATURE", "0.8"))}
 if os.environ.get("NARRATE_CB_SEED"):
     OPTS["seed"] = int(os.environ["NARRATE_CB_SEED"])
@@ -137,33 +141,8 @@ def apply_prosody(wav, prosody):
     return np.clip(wav, -1.0, 1.0)
 
 
-# Shorthand for the same SSML, so narration costs fewer tokens:
-#   {.4} / {2}        pause, seconds           {fast:..} {slow:..}   rate
-#   {hi:..} {lo:..}   pitch                    {loud:..} {soft:..}   volume
-#   {spell:API}       spell it out             {s2:..} {hifi-92:..}  another voice
-SHORT = {"fast": '<prosody rate="fast">', "slow": '<prosody rate="slow">', "hi": '<prosody pitch="high">',
-         "lo": '<prosody pitch="low">', "loud": '<prosody volume="loud">', "soft": '<prosody volume="soft">',
-         "spell": '<say-as interpret-as="characters">'}
-
-
-def expand(line: str) -> str:
-    """Shorthand -> SSML (innermost braces first, so they nest)."""
-    line = line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    line = re.sub(r"\{(\d*\.?\d+)\}", lambda m: f'<break time="{float(m.group(1))}s"/>', line)  # ".4" -> "0.4"
-    span = re.compile(r"\{([\w-]+):([^{}]*)\}")
-    def tag(m):
-        key, body = m.group(1), m.group(2)
-        if key in SHORT:
-            open_ = SHORT[key]
-            return f"{open_}{body}</{open_[1:].split()[0]}>"
-        return f'<voice name="{key}">{body}</voice>'
-    while span.search(line):
-        line = span.sub(tag, line)
-    return f"<speak>{line}</speak>"
-
-
 def items(line: str):
-    if ssml and re.search(r"\{(\d*\.?\d+|[\w-]+:[^{}]*)\}", line):
+    if ssml and has_shorthand(line):
         line = expand(line)
     if ssml and re.search(r"<\w[^>]*>", line):  # any SSML tag, even mid-line after a [tag]
         try:
@@ -216,7 +195,12 @@ class Handler(socketserver.StreamRequestHandler):
             gen.close()
 
 
-Path(SOCK).unlink(missing_ok=True)
+Path(SOCK).unlink(missing_ok=True)  # a stale socket; speak.py's lock means no other server owns it
 with socketserver.UnixStreamServer(SOCK, Handler) as srv:
+    srv.timeout, srv.idle = float(os.environ.get("NARRATE_CB_IDLE", "1800")), False
+    srv.handle_timeout = lambda: setattr(srv, "idle", True)
     print("ready", flush=True)
-    srv.serve_forever()
+    while not srv.idle:
+        srv.handle_request()
+    Path(SOCK).unlink(missing_ok=True)  # idle: free the model; the next speak starts a new server
+    print("idle, exiting", flush=True)

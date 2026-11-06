@@ -34,6 +34,12 @@ _player = None
 TAG_RE = re.compile(r"\[[a-z ]+\]\s*", re.I)
 
 
+def plain(text: str) -> str:
+    """For Piper / say: drop Chatterbox tags, SSML and the {.4} / {fast:...} shorthand."""
+    text = common.strip_shorthand(re.sub(r"<[^>]+>", " ", TAG_RE.sub("", text)))
+    return " ".join(text.split())
+
+
 def synthesize(text: str, out_path: str, voice_path=None) -> None:
     """Text -> WAV with Piper. Raises if Piper or the voice is missing."""
     from piper import PiperVoice  # installed into the venv by install.sh
@@ -72,18 +78,47 @@ def chatterbox_connect():
         pass
     if not CHATTERBOX_PY.exists():
         raise FileNotFoundError(f"Chatterbox venv not found: {CHATTERBOX_PY}")
+    import fcntl
     common.STATE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(common.STATE_DIR / "chatterbox.log", "ab") as logf:
-        subprocess.Popen([str(CHATTERBOX_PY), str(Path(__file__).with_name("chatterbox_server.py")),
-                          sock_path, CHATTERBOX_VOICE], stdout=logf, stderr=logf,
-                         stdin=subprocess.DEVNULL, start_new_session=True)
-    for _ in range(240):  # up to 2 minutes for the first model load
-        time.sleep(0.5)
+    pid_file = common.STATE_DIR / "chatterbox.pid"
+    # One starter at a time: a second speak during the first load waits here, then connects to that server
+    # instead of starting another (which would delete the first one's socket). Released when this returns.
+    with open(common.STATE_DIR / "chatterbox.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
         try:
             return connect()
         except (FileNotFoundError, ConnectionRefusedError):
-            continue
+            pass
+        try:
+            pid = int(pid_file.read_text())
+        except (OSError, ValueError):
+            pid = 0
+        proc = None
+        # (A stale pid reused by another process only means waiting out the two minutes once.)
+        if not (pid and _alive(pid)):  # else a server is still loading (its starter was stopped): wait for it
+            with open(common.STATE_DIR / "chatterbox.log", "ab") as logf:
+                proc = subprocess.Popen([str(CHATTERBOX_PY), str(Path(__file__).with_name("chatterbox_server.py")),
+                                         sock_path, CHATTERBOX_VOICE], stdout=logf, stderr=logf,
+                                        stdin=subprocess.DEVNULL, start_new_session=True)
+            pid = proc.pid
+            pid_file.write_text(str(pid))
+        for _ in range(240):  # up to 2 minutes for the first model load
+            time.sleep(0.5)
+            try:
+                return connect()
+            except (FileNotFoundError, ConnectionRefusedError):
+                pass
+            if (proc.poll() is not None) if proc else not _alive(pid):
+                raise RuntimeError("chatterbox server exited; see state/chatterbox.log")
     raise RuntimeError("chatterbox server didn't start; see state/chatterbox.log")
+
+
+def _alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
 
 
 def chatterbox_play(sock, text: str) -> None:
@@ -231,7 +266,7 @@ def main(argv=None) -> int:
             with sock:
                 return speaking(lambda: chatterbox_play(sock, text))
 
-    text = re.sub(r"<[^>]+>", " ", TAG_RE.sub("", text)).strip()  # Piper / say: drop Chatterbox tags and SSML
+    text = plain(text)
     target = args.out
     tmp = None
     if not target:

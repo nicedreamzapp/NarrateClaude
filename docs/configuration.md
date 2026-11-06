@@ -57,7 +57,7 @@ NARRATE_DICTATION_LAUNCHER="NarrativeClaude.app" \
 
 | Variable | Default | What the code does |
 |---|---|---|
-| `INJECT_FORCE` | `0` | Set to `1` to skip the noise gate: lines wrapped in `(...)` or `[...]` and lines under 3 words that do not end in `?` are normally dropped. |
+| `INJECT_FORCE` | `0` | Set to `1` to skip the noise gate: lines wrapped in `(...)` or `[...]` and lines under 3 words that do not end in `?` are normally dropped, except real short replies (yes, no, ok, okay, stop, continue, go ahead, thank you, ...; the list is `SHORT_REPLIES` in `dictation/voice/common.py`). |
 
 The inject comment mentions a `dictation send` debug command. That subcommand does not exist in `dictation`. To type a line by hand, call inject directly:
 
@@ -150,6 +150,17 @@ Register it in Claude Code's settings as a `Stop` hook command ([hooks docs](htt
 Then `touch ~/.claude/narration.on` to turn it on. Note that `CLAUDE.md` already tells Claude to speak through `speak`, so running both may read replies twice.
 
 The docstring mentions Kokoro-82M. The code just runs whatever `SPEAK` points to.
+
+## Chatterbox voice (`speak.py`)
+
+Set `NARRATE_TTS=chatterbox` and the built-in `speak` streams each line from Chatterbox Turbo instead of Piper. It needs:
+
+- `ffplay` (part of ffmpeg, e.g. `brew install ffmpeg`), which plays the stream.
+- The [explain-as-podcast](https://github.com/hershykoh/explain-as-podcast) Claude Code plugin, installed and set up once: `speak` runs the server in its venv (`~/.local/share/explain-as-podcast/venv`), uses its voices, and parses tags and SSML with its `scripts/ssml.py`.
+
+The first line starts `dictation/voice/chatterbox_server.py`, which loads the model (about 20 s) and then stays up; it exits after `NARRATE_CB_IDLE` seconds without a line (default 1800). If the server can't start or dies, `speak` falls back to Piper. Its other settings are at the top of `chatterbox_server.py`. The Perth watermark is on by default (`NARRATE_CB_WATERMARK=0` turns it off).
+
+Markup (see `CLAUDE.md`): tags like `[laugh]`, pauses `{.4}` (capped at 5 s), and spans `{fast:...}`, `{slow:...}`, `{hi:...}`, `{lo:...}`, `{loud:...}`, `{soft:...}`, `{spell:...}`, `{s2:...}`. Piper and `say` strip all of it.
 
 ## Files and paths
 
