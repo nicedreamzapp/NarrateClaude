@@ -420,6 +420,8 @@ class Listener:
         self.stopping.set()
         self.jobs.put(None)
         self.server.stop()
+        if getattr(self, "_ref", None):
+            self._ref.stop()
 
     def _live(self, state, text):
         if self.live:
@@ -497,7 +499,8 @@ class Listener:
                        "staying deaf while the computer talks")
             return None
         common.log("stt: barge-in on (WebRTC AEC3 + level gate); talk over the voice to stop it")
-        return bargein.BargeIn(), bargein.Reference(read_wav).start()
+        ref = bargein.Reference(active=lambda: not self.stopping.is_set()).start()
+        return bargein.BargeIn(), ref
 
     def run_mic(self, barge_in=None):
         import sounddevice as sd  # only needed for the live mic
@@ -535,6 +538,7 @@ class Listener:
             self._received = 0       # 16 kHz samples in; `_received` lines up with `stamp`
             self._done = 0           # samples handed on
             self._reply, self._anchor, self._barged_until, self._last_dbg = None, 0, 0.0, 0.0
+            self._barge_cap, self._killed = 0.0, None
         self._received += len(block)
         if not self.barge_in:
             if self.speaking or now < self._muted_until:
@@ -555,13 +559,29 @@ class Listener:
             start = self._done
             self._done += FRAME
             if now < self._barged_until:
-                # Just interrupted: the voice is stopped. Keep the canceller running on
-                # the room's echo tail (reference now silent) and transcribe.
-                clean, _ = self.barge_in.feed(frame, [0.0] * FRAME)
-                self.endpointer.feed(array("f", clean))
-                if self.endpointer.in_speech:
-                    self._barged_until = now + 1.0
-                continue
+                cur, unknown = self._ref.snapshot()
+                if unknown or (cur is not None and cur[0] != self._killed):
+                    # Something new started playing: close the window. Its voice must
+                    # never reach the transcriber uncancelled: drop the frames since it
+                    # started, send what the person said before that, and let the
+                    # speaking path below take over (with the new reference, or deaf).
+                    self._barged_until = 0.0
+                    ep = self.endpointer
+                    if ep.in_speech:
+                        since = stamp - cur[2] if cur is not None else 0.3
+                        drop = min(len(ep.frames), int(since * RATE / FRAME) + 2)
+                        del ep.frames[len(ep.frames) - drop:]
+                        ep.quiet_run = max(0, ep.quiet_run - drop)
+                        ep.flush()
+                    ep.reset()
+                else:
+                    # Just interrupted: the voice is stopped. Keep the canceller running on
+                    # the room's echo tail (reference now silent) and transcribe.
+                    clean, _ = self.barge_in.feed(frame, bargein.ref_frame((), 0, FRAME))
+                    self.endpointer.feed(array("f", clean))
+                    if self.endpointer.in_speech:
+                        self._barged_until = min(now + 1.0, self._barge_cap)
+                    continue
             if not (self.speaking or now < self._muted_until):
                 self._reply = None
                 self.endpointer.feed(frame)
@@ -592,6 +612,9 @@ class Listener:
                 for f in self.barge_in.take_preroll():
                     self.endpointer.feed(array("f", f))
                 self._barged_until = now + 1.5
+                # Hard cap: the window never outlives one long sentence.
+                self._barge_cap = now + 15.0
+                self._killed = key
                 self._reply = None
 
 

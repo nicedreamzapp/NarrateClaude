@@ -37,6 +37,7 @@ Barge-ins are logged to dictation/state/bargein.log (not the terminal, which cla
 import collections
 import math
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -78,9 +79,31 @@ def _db(x) -> float:
 
 
 def _rms(frame) -> float:
-    if not len(frame):
-        return 0.0
-    return math.sqrt(sum(float(v) * float(v) for v in frame) / len(frame))
+    import numpy as np
+    x = np.asarray(frame, dtype=np.float32)
+    return float(np.sqrt(np.mean(x * x))) if x.size else 0.0
+
+
+def read_wav(path):
+    """Any PCM WAV -> mono float32 numpy samples at 16 kHz (vectorized)."""
+    import wave
+    import numpy as np
+    with wave.open(str(path), "rb") as w:
+        ch, width, rate = w.getnchannels(), w.getsampwidth(), w.getframerate()
+        raw = w.readframes(w.getnframes())
+    if width == 2:
+        x = np.frombuffer(raw, dtype="<i2").astype(np.float32) / 32768.0
+    elif width == 4:
+        x = np.frombuffer(raw, dtype="<i4").astype(np.float32) / 2147483648.0
+    elif width == 1:
+        x = (np.frombuffer(raw, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+    else:
+        raise ValueError(f"unsupported sample width {width}")
+    x = x[:len(x) // ch * ch].reshape(-1, ch).mean(axis=1)
+    if rate != RATE and len(x):
+        n = int(len(x) * RATE / rate)
+        x = np.interp(np.arange(n) * (rate / RATE), np.arange(len(x)), x).astype(np.float32)
+    return x
 
 
 # --- echo canceller -------------------------------------------------------------
@@ -138,7 +161,13 @@ class Detector:
         self.reset()
 
     def reset(self):
+        """Forget everything (first reply of the session)."""
         self.echo_db = -60.0
+        self.new_reply()
+
+    def new_reply(self):
+        """A new reply: start the warm-up again but keep the echo floor learned so far,
+        so someone already talking when it starts can't become the baseline."""
         self.recent = collections.deque(maxlen=self.window)
         self.frames = 0
 
@@ -152,6 +181,10 @@ class Detector:
             # Track the leftover echo: rise quickly, fall slowly.
             a = 0.3 if level_db > self.echo_db else 0.05
             self.echo_db = self.echo_db * (1 - a) + level_db * a
+            if self.frames <= self.holdoff:
+                # Warm-up hears everything, the person included: never let it
+                # push the echo estimate above the fixed floor.
+                self.echo_db = min(self.echo_db, self.floor_db)
         if self.frames <= self.holdoff:
             return False
         self.recent.append(loud)
@@ -169,7 +202,7 @@ class BargeIn:
 
     def start_reply(self):
         """A new reply started playing."""
-        self.det.reset()
+        self.det.new_reply()
         self.preroll.clear()
 
     def feed(self, mic, ref):
@@ -186,11 +219,12 @@ class BargeIn:
 
 
 def ref_frame(samples, i, n):
-    """samples[i:i+n] as floats, zero-padded where it runs off either end."""
-    out = [0.0] * n
+    """samples[i:i+n] as float32, zero-padded where it runs off either end."""
+    import numpy as np
+    out = np.zeros(n, dtype=np.float32)
     lo, hi = max(0, i), min(len(samples), i + n)
-    for j in range(lo, hi):
-        out[j - i] = samples[j]
+    if hi > lo:
+        out[lo - i:hi - i] = samples[lo:hi]
     return out
 
 
@@ -199,9 +233,13 @@ def ref_frame(samples, i, n):
 class Reference:
     """Finds the WAV the speaker is playing (afplay's file) and when it started."""
 
-    def __init__(self, read_wav, poll_sec=0.05):
-        self.read_wav = read_wav
+    IDLE_SEC = 0.15   # between polls while nothing plays (same pace as stt's speaking poller)
+
+    def __init__(self, read_wav=None, poll_sec=0.05, active=None):
+        self.read_wav = read_wav or globals()["read_wav"]
         self.poll_sec = poll_sec
+        self.active = active or (lambda: True)   # e.g. the listener is running
+        self._interval = poll_sec
         self.lock = threading.Lock()
         self.current = None      # (key, samples, t0 wall clock)
         self.unknown = False     # something plays that we can't read
@@ -227,51 +265,69 @@ class Reference:
                                  text=True, timeout=2).stdout
         except Exception:
             return []
-        found = []
-        for line in out.splitlines():
-            parts = line.split(None, 1)
-            if len(parts) < 2:
-                continue
-            args = parts[1].split()[1:]
-            # -r / -q change the timing: we can't line that up, so treat it as unknown.
-            if any(a in ("-r", "--rate", "-q", "--rQuality") for a in args):
-                found.append((int(parts[0]), None))
-                continue
-            path = args[-1] if args else ""
-            found.append((int(parts[0]), path if path.lower().endswith((".wav", ".wave")) else None))
-        return found
+        return [Reference.parse(line) for line in out.splitlines() if line.split(None, 1)[1:]]
+
+    @staticmethod
+    def parse(line):
+        """'pid args' from ps -> (pid, wav path or None). Paths may contain spaces."""
+        pid, args = line.split(None, 1)
+        rest = args.split(None, 1)[1] if len(args.split(None, 1)) > 1 else ""
+        # -r / -q change the timing: we can't line that up, so treat it as unknown.
+        if re.search(r"(^|\s)(-r|--rate|-q|--rQuality)(\s|$)", rest):
+            return int(pid), None
+        m = re.search(r"(?:^|\s)(/.*?\.wave?)\s*$", rest, re.I)
+        return int(pid), (m.group(1) if m else None)
 
     def _loop(self):
         while not self._stop.is_set():
-            self.poll_once()
-            self._stop.wait(self.poll_sec)
+            if not self.active():
+                with self.lock:
+                    self.current, self.unknown = None, False
+                self._stop.wait(1.0)
+                continue
+            playing = self.poll_once()
+            # Fast while something plays, slower when idle. A new player is seen
+            # at most one interval late; poll_once leads t0 by that interval.
+            self._interval = self.poll_sec if playing else self.IDLE_SEC
+            self._stop.wait(self._interval)
 
     def poll_once(self):
         seen = time.time()
+        lead = self._interval
         players = self._afplay()
-        with self.lock:
-            if not players:
+        if not players:
+            with self.lock:
                 self.current, self.unknown = None, False
-            elif len(players) > 1 or players[0][1] is None:
+            return False
+        if len(players) > 1 or players[0][1] is None:
+            with self.lock:
                 self.current, self.unknown = None, True
-            else:
-                pid, path = players[0]
-                key = (pid, path)
-                if not self.current or self.current[0] != key:
-                    samples = self._load(path)
-                    # Lead the real start a little: the reference must come
-                    # before the echo, never after it.
-                    self.current = (key, samples, seen - self.poll_sec) if samples is not None else None
-                    self.unknown = samples is None
+            return True
+        pid, path = players[0]
+        key = (pid, path)
+        with self.lock:
+            same = self.current is not None and self.current[0] == key
+        if not same:
+            samples = self._load(path)          # decode outside the lock
+            with self.lock:
+                # Lead the real start: the reference must come before the echo, never after.
+                self.current = (key, samples, seen - lead) if samples is not None else None
+                self.unknown = samples is None
+        return True
 
     def _load(self, path):
-        if path in self._cache:
-            return self._cache[path]
+        try:
+            st = os.stat(path)
+            ck = (path, st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
+        if ck in self._cache:
+            return self._cache[ck]
         try:
             samples = self.read_wav(path)
         except Exception:
             samples = None
-        self._cache = {path: samples}
+        self._cache = {ck: samples}
         return samples
 
     def snapshot(self):

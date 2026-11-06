@@ -7,3 +7,6 @@ pytest==8.4.2; python_version >= "3.9" and python_version < "3.10"
 # numpy 2.2 dropped Python 3.9, which is still /usr/bin/python3 on macOS.
 numpy==2.0.2; python_version < "3.10"
 numpy==2.2.6; python_version >= "3.10"
+# Barge-in tests (tests/test_bargein.py) need the WebRTC echo canceller; the livekit
+# wheel ships it prebuilt. macOS only so the Linux/Windows jobs stay lean.
+livekit==1.2.1; sys_platform == "darwin" and python_version >= "3.10"

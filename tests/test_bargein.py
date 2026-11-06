@@ -10,6 +10,7 @@ synthetic voice-like signal stands in. Needs the echo canceller wheel
 (`pip install livekit numpy`); skipped without it.
 """
 
+import math
 import shutil
 import subprocess
 import sys
@@ -159,9 +160,10 @@ def test_barge_in_fires_fast_on_the_person(clips, path, level):
 
 def test_ref_frame_pads_both_ends():
     s = [1.0, 2.0, 3.0]
-    assert bargein.ref_frame(s, -2, 4) == [0.0, 0.0, 1.0, 2.0]
-    assert bargein.ref_frame(s, 2, 3) == [3.0, 0.0, 0.0]
-    assert bargein.ref_frame(s, 5, 2) == [0.0, 0.0]
+    s = np.asarray(s, np.float32)
+    assert bargein.ref_frame(s, -2, 4).tolist() == [0.0, 0.0, 1.0, 2.0]
+    assert bargein.ref_frame(s, 2, 3).tolist() == [3.0, 0.0, 0.0]
+    assert bargein.ref_frame(s, 5, 2).tolist() == [0.0, 0.0]
 
 
 def test_detector_holds_off_then_needs_several_loud_frames():
@@ -173,6 +175,43 @@ def test_detector_holds_off_then_needs_several_loud_frames():
     d.reset()
     fired = [d.feed(-20) for _ in range(4)]
     assert fired[-1] and not any(fired[:-1])
+
+
+def test_warm_up_cannot_learn_the_person_as_echo():
+    d = bargein.Detector(floor_db=-38, margin_db=10, needed=4, holdoff_ms=300)
+    for _ in range(d.holdoff):          # person already talking loudly as the reply starts
+        d.feed(-15)
+    assert d.echo_db <= -38
+    assert any(d.feed(-20) for _ in range(6))   # still heard right after the warm-up
+    d.feed(-60)
+    before = d.echo_db
+    d.new_reply()                       # next reply keeps the learned floor
+    assert d.echo_db == before
+
+
+def test_wav_decode_matches_and_is_vectorized(tmp_path):
+    src = [math.sin(i / 7) * 0.5 for i in range(44100)]
+    p = tmp_path / "a.wav"
+    import wave
+    with wave.open(str(p), "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(44100)
+        w.writeframes(np.repeat((np.asarray(src) * 32767).astype("<i2"), 2).tobytes())
+    fast, slow = bargein.read_wav(p), np.asarray(stt.read_wav(p))
+    assert abs(len(fast) - len(slow)) <= 1
+    m = min(len(fast), len(slow))
+    assert np.max(np.abs(fast[:m] - slow[:m])) < 1e-3
+
+
+@pytest.mark.parametrize("line, path", [
+    ("42 /usr/bin/afplay /tmp/speak-1/out_000.wav", "/tmp/speak-1/out_000.wav"),
+    ("42 afplay -v 1.3 /Users/me/My Voice/reply 1.wav", "/Users/me/My Voice/reply 1.wav"),
+    ("42 afplay -r 1.2 /tmp/a.wav", None),
+    ("42 afplay /tmp/a.mp3", None),
+])
+def test_afplay_command_line(line, path):
+    assert bargein.Reference.parse(line) == (42, path)
 
 
 def test_disabled_by_default(monkeypatch):
@@ -193,11 +232,16 @@ def test_falls_back_to_deaf_without_the_canceller(monkeypatch):
 def test_reference_reads_afplay_wav(monkeypatch, tmp_path):
     wav = tmp_path / "out_000.wav"
     wav.write_bytes(stt.to_wav_bytes([0.1] * 1600))
-    ref = bargein.Reference(stt.read_wav)
+    ref = bargein.Reference()
     monkeypatch.setattr(bargein.Reference, "_afplay", staticmethod(lambda: [(42, str(wav))]))
     ref.poll_once()
     cur, unknown = ref.snapshot()
     assert cur and len(cur[1]) == 1600 and not unknown
+    # Same path rewritten (speak reuses out_000.wav): the cache must not serve the old audio.
+    wav.write_bytes(stt.to_wav_bytes([0.2] * 3200))
+    ref.current = None
+    ref.poll_once()
+    assert len(ref.snapshot()[0][1]) == 3200
     monkeypatch.setattr(bargein.Reference, "_afplay", staticmethod(lambda: [(43, None)]))
     ref.poll_once()
     assert ref.snapshot() == (None, True)   # can't read it -> listener stays deaf
@@ -205,10 +249,10 @@ def test_reference_reads_afplay_wav(monkeypatch, tmp_path):
 
 class FakeRef:
     def __init__(self, samples):
-        self.samples, self.on = samples, True
+        self.samples, self.on, self.key, self.t0 = samples, True, (1, "reply.wav"), 0.0
 
     def snapshot(self):
-        return ((1, "reply.wav"), self.samples, 0.0) if self.on else None, False
+        return ((self.key, self.samples, self.t0) if self.on else None), False
 
 
 def listen_through(tts, mic_fn, monkeypatch):
@@ -273,3 +317,45 @@ def test_listener_stops_the_voice_and_keeps_the_first_words(clips, monkeypatch):
     got = np.asarray(utts[0])
     # Everything the person said is in the utterance: from before onset to the end of the clip.
     assert len(got) / RATE >= (at + len(u) / RATE) - on
+
+
+def test_window_after_barge_in_closes_when_a_new_reply_starts(clips, monkeypatch):
+    """The person finishes, and 0.2 s later (inside the post-barge-in window) a new reply
+    starts playing. Their sentence must still be sent, and none of the new reply with it."""
+    tts, users = clips
+    listener = stt.Listener(lambda *a: None, server=object())
+    sent = []
+    listener.endpointer.on_utterance = lambda a: sent.append((t, len(a) / RATE))
+    listener.barge_in = bargein.BargeIn()
+    listener._ref = FakeRef(tts[0])
+    monkeypatch.setattr(bargein, "log", lambda msg: None)
+    kill = []
+
+    def stop():
+        kill.append(t)
+        listener._ref.on = False
+    monkeypatch.setattr(bargein, "stop_playback", stop)
+    u = users[0] / (rms(users[0]) + 1e-9) * 0.08
+    at = 3.0
+    t2 = at + len(u) / RATE + 0.2
+    n = int((t2 + 4) * RATE)
+    echo1 = room(tts[0], 0.12, 0.6, n)
+    second = tts[1]
+    echo2 = np.zeros(n, np.float32)
+    s2 = int(t2 * RATE)
+    echo2[s2:] = room(second, 0.12, 0.6, n - s2)
+    mic = np.random.default_rng(4).normal(0, 0.002, n).astype(np.float32)
+    mic[int(at * RATE):int(at * RATE) + len(u)] += u
+    for k in range(0, n - FRAME + 1, FRAME):
+        t = (k + FRAME) / RATE
+        frame = mic[k:k + FRAME] + (echo1[k:k + FRAME] if not kill else 0) + echo2[k:k + FRAME]
+        if kill and t >= t2 + 0.05 and listener._ref.key[0] == 1:   # seen one poll late
+            listener._ref.on, listener._ref.key = True, (2, "next.wav")
+            listener._ref.samples, listener._ref.t0 = second, t2 - 0.05
+        listener.speaking = listener._ref.on
+        listener.feed_block(frame.tolist(), t, t)
+    assert kill
+    assert len(sent) == 1, sent                       # the person's sentence, once
+    when, length = sent[0]
+    assert when < t2 + 0.3                            # sent as soon as the new reply showed up
+    assert length <= (t2 - (kill[0] - bargein.PREROLL_SEC)) + 0.05   # nothing after t2 in it
