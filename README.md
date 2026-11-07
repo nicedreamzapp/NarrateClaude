@@ -357,6 +357,7 @@ The first time you run it, your OS asks for Microphone access for your terminal 
 - **Very short commands get dropped.** Anything under 3 words is ignored unless it ends in `?` or is a common short reply ("yes", "no", "okay", "stop", "do it", "go ahead" and a few more), so other one or two word lines won't go through.
 - **The voiceprint filter is Terminal-mode only.** Once you enroll a voiceprint, the whisper listener hands it each sentence's audio in Terminal.app mode; `--here` sessions don't run it yet.
 - **The relevance judge is optional.** It auto-starts a local MLX Llama server on port 8190, but only if `~/.local/mlx-server/bin/python` exists (a Python with `mlx_lm` installed). If that isn't there or the model isn't downloaded, every line passes.
+- **Open bugs we'd love help with:** a fake "Okay" typed in from keyboard noise ([#16](https://github.com/nicedreamzapp/NarrateClaude/issues/16)), a line occasionally sent twice when the relevance judge times out ([#17](https://github.com/nicedreamzapp/NarrateClaude/issues/17)), and the listener sometimes needing the Terminal window in front ([#18](https://github.com/nicedreamzapp/NarrateClaude/issues/18)). Each issue has the details and a repro.
 
 
 ### 🏃 Run It
