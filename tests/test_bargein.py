@@ -391,7 +391,7 @@ def test_phantom_filter_is_conservative():
 
 
 def test_default_path_is_unchanged(monkeypatch):
-    """Barge-in off: the old 0.006 floor, plain json from whisper, no transcript ever dropped."""
+    """Barge-in off: the old 0.006 floor, plain json from whisper, no phantom drop."""
     assert stt.Endpointer(lambda a: None).min_level == 0.006
     server = stt.WhisperServer(model=Path("m.bin"), binary=Path("ws"), port=1)
     assert not getattr(server, "verbose", False)
@@ -400,13 +400,27 @@ def test_default_path_is_unchanged(monkeypatch):
     class Server:
         last_no_speech = 0.99
         def transcribe(self, wav):
-            return "Okay."
+            return "Okay, open it."
     listener = stt.Listener(lambda text, wav: got.append(text), server=Server())
     listener.barge_in = None
     listener.jobs.put(stt.array("f", bytes(4 * RATE)))
     listener.jobs.put(None)
     listener._transcribe_loop()
-    assert got == ["Okay."]
+    assert got == ["Okay, open it."]
+
+
+def test_short_reply_needs_a_held_sound():
+    """#16: whisper's "Okay." on keyboard clicks is dropped; a spoken one is kept."""
+    room = np.random.default_rng(7).normal(0, 0.001, int(1.5 * RATE)).astype(np.float32)
+    clicks = room.copy()
+    for start in range(4000, 20000, 1600):                # 10 clicks, 40 ms each, 100 ms apart
+        clicks[start:start + 640] += _tone(0.04, 0.2)
+    spoken = room.copy()
+    spoken[4000:4000 + 4800] += _tone(0.3, 0.05)
+    assert stt.is_noise_reply("Okay.", clicks.tolist())
+    assert stt.is_noise_reply("yes", room.tolist())
+    assert not stt.is_noise_reply("Okay.", spoken.tolist())
+    assert not stt.is_noise_reply("Okay, open the file.", clicks.tolist())   # not a bare reply
 
 
 def test_quiet_mic_speech_still_starts_an_utterance():

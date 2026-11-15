@@ -398,20 +398,48 @@ NO_SPEECH_DROP = 0.6
 PHANTOM_MAX_LOUD_SEC = 0.15
 YES_NO = {"yes", "no", "yeah", "yep", "yup", "nope", "nah"}   # never dropped
 
+# Both modes: a bare short reply ("Okay.") skips the under-3-words gate, so whisper's guess
+# on a keyboard click or a desk bump lands in the chat (#16). Keep it only if the clip holds
+# one unbroken sound this long, well above the room (the loud_seconds gate: 4x the clip's
+# quiet part, never under -54 dBFS). A click fills one or two 30 ms frames; even a clipped
+# "ok" or "no" holds its vowel well past 120 ms, so 4 frames errs toward letting speech in.
+SHORT_REPLY_MIN_RUN_SEC = 0.12
+
 
 def words_of(text: str) -> list:
     """Lowercase words, punctuation gone ("Okay, okay." -> ["okay", "okay"])."""
     return re.sub(r"[^\w\s']", " ", text.lower()).split()
 
 
-def loud_seconds(audio) -> float:
-    """Seconds of the utterance well above its own quietest part (the room)."""
+def _loud_frames(audio) -> list:
+    """Per 30 ms frame: is it well above the utterance's own quietest part (the room)?"""
     levels = [rms(audio[i:i + FRAME]) for i in range(0, len(audio) - FRAME + 1, FRAME)]
     if not levels:
-        return 0.0
+        return []
     quiet = sorted(levels)[len(levels) // 5]
     gate = max(0.002, 4 * quiet)
-    return sum(1 for v in levels if v > gate) * FRAME / RATE
+    return [v > gate for v in levels]
+
+
+def loud_seconds(audio) -> float:
+    """Seconds of the utterance well above its own quietest part (the room)."""
+    return sum(_loud_frames(audio)) * FRAME / RATE
+
+
+def longest_loud_run(audio) -> float:
+    """Seconds of the longest unbroken stretch of loud frames."""
+    best = run = 0
+    for loud in _loud_frames(audio):
+        run = run + 1 if loud else 0
+        best = max(best, run)
+    return best * FRAME / RATE
+
+
+def is_noise_reply(text: str, audio) -> bool:
+    """A bare short reply ("Okay.") whose audio is only clicks, not a held sound."""
+    if " ".join(words_of(text)) not in common.SHORT_REPLIES:
+        return False
+    return longest_loud_run(audio) < SHORT_REPLY_MIN_RUN_SEC
 
 
 def is_phantom(text: str, audio, no_speech=None) -> bool:
@@ -495,10 +523,15 @@ class Listener:
                 common.log(f"stt: transcription failed: {e}")
                 self._live("done", "")
                 continue
+            reason = ""
             if text and self.barge_in and is_phantom(text, audio, getattr(self.server, "last_no_speech", None)):
+                reason = "phantom"
+            elif text and is_noise_reply(text, audio):
+                reason = "noise_reply"
+            if reason:
                 try:
                     with open(common.STATE_DIR / "dropped.log", "a", encoding="utf-8") as f:
-                        f.write(f"stt\tphantom\t{text}\n")
+                        f.write(f"stt\t{reason}\t{text}\n")
                 except OSError:
                     pass
                 text = ""
